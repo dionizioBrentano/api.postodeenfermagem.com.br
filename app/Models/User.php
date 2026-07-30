@@ -52,6 +52,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'council_number' => \App\Casts\EncryptedWithDek::class.':id,council_number_token',
             'mfa_enabled' => 'boolean',
         ];
     }
