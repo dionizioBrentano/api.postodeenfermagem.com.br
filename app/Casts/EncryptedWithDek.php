@@ -56,11 +56,6 @@ class EncryptedWithDek implements CastsAttributes
             return null;
         }
 
-        // Se tivermos um campo de blind index, geramos o token agora com o valor real
-        if ($this->blindIndexField) {
-            $model->attributes[$this->blindIndexField] = \App\Services\TokenizationService::blindIndex((string) $value);
-        }
-
         $idField = $this->dekKey ?: $model->getKeyName();
 
         // Se o field for a primary key e estiver vazio, tenta gerar
@@ -77,7 +72,17 @@ class EncryptedWithDek implements CastsAttributes
         /** @var CryptoService */
         $cryptoService = app(CryptoService::class);
         $dek = $cryptoService->getOrCreateDek($recordId);
+        
+        $encrypted = $cryptoService->encrypt((string) $value, $dek);
 
-        return $cryptoService->encrypt((string) $value, $dek);
+        // Se tivermos um campo de blind index, retornamos ambos em um array (suportado por Laravel Casts)
+        if ($this->blindIndexField) {
+            return [
+                $key => $encrypted,
+                $this->blindIndexField => \App\Services\TokenizationService::blindIndex((string) $value),
+            ];
+        }
+
+        return $encrypted;
     }
 }
