@@ -40,7 +40,7 @@ return [
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Requested-With', 'Accept', 'Origin'],
+    'allowed_headers' => ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Requested-With', 'Accept', 'Origin', 'X-App-Token'],
 
     'exposed_headers' => ['X-Tenant-ID'],
 
