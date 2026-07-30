@@ -4,6 +4,7 @@ namespace App\Traits;
 
 use App\Models\RecordEncryptionKey;
 use App\Services\CryptoService;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use RuntimeException;
 
 /**
@@ -42,10 +43,18 @@ trait HasEncryptedFields
             $model->persistPendingDek();
         });
 
-        static::forceDeleted(function ($model) {
-            $model->recordEncryptionKey()->delete();
-            unset(static::$pendingDeks[spl_object_id($model)]);
-        });
+        // "forceDeleted" só existe como evento registrável em models que usam
+        // SoftDeletes (ex.: Patient, User). Modelos append-only como AuditLog
+        // não usam SoftDeletes de propósito — chamar static::forceDeleted()
+        // incondicionalmente aqui quebra o boot desses models (o método não
+        // existe e a chamada cai em Model::__callStatic(), recriando a
+        // instância recursivamente e lançando BadMethodCallException).
+        if (in_array(SoftDeletes::class, class_uses_recursive(static::class))) {
+            static::forceDeleted(function ($model) {
+                $model->recordEncryptionKey()->delete();
+                unset(static::$pendingDeks[spl_object_id($model)]);
+            });
+        }
     }
 
     public function recordEncryptionKey()
