@@ -48,30 +48,5 @@ Route::prefix('v1')->group(function () {
         Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
     
         // Rota de Logs (Para Debug)
-        Route::get('/logs', [\App\Http\Controllers\LogViewerController::class, 'index']);
-
-        // Rota de Debug Patient
-        Route::get('/debug-patient', [\App\Http\Controllers\DebugPatientController::class, 'index']);
-    });
-
-
-    // ==========================================
-    // PROTECTED API ROUTES (App + User + Tenant + Scopes)
-    // ==========================================
-
-    Route::middleware(['require_app_token', 'auth:sanctum', 'tenant'])->group(function () {
         
-        // Exemplo: rota que exige o scope 'patient:read'
-        Route::get('/tenant-test', function () {
-            $tenant = app('tenant');
-            $user = request()->user();
-            return response()->json([
-                'message' => 'Acesso Duplo Concedido! Tenant + User identificados.',
-                'tenant' => $tenant->name,
-                'user' => $user->name,
-                'scopes' => $user->currentAccessToken()->abilities,
-            ]);
-        })->middleware('ability:patient:read');
-
-    });
 });
