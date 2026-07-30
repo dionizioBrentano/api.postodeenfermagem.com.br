@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Gate;
+use App\Models\User;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +21,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Gate::define('manage-tenant', function (User $user) {
+            return $user->user_type === 'admin';
+        });
+
+        Gate::define('write-clinical', function (User $user) {
+            return in_array($user->user_type, ['professional']);
+        });
     }
 }

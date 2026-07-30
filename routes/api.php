@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ApplicationAuthController;
 
 Route::prefix('v1')->group(function () {
     
@@ -22,15 +24,41 @@ Route::prefix('v1')->group(function () {
         ], $dbStatus ? 200 : 503);
     });
 
-    // Rota protegida por tenant para validação no Sprint 0
-    Route::middleware(['tenant'])->group(function () {
+    // ==========================================
+    // AUTHENTICATION ROUTES
+    // ==========================================
+
+    // Application Auth (M2M)
+    Route::post('/auth/application/token', [ApplicationAuthController::class, 'token']);
+
+    // User Login (Público)
+    Route::post('/auth/login', [AuthController::class, 'login']);
+
+    // Requer Autenticação Básica (MFA Steps, Logout)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/auth/mfa/setup', [AuthController::class, 'setupMfa']);
+        Route::post('/auth/mfa/verify', [AuthController::class, 'verifyMfa']);
+        Route::post('/auth/logout', [AuthController::class, 'logout']);
+    });
+
+
+    // ==========================================
+    // PROTECTED API ROUTES (App + User + Tenant + Scopes)
+    // ==========================================
+
+    Route::middleware(['require_app_token', 'auth:sanctum', 'tenant'])->group(function () {
+        
+        // Exemplo: rota que exige o scope 'patient:read'
         Route::get('/tenant-test', function () {
             $tenant = app('tenant');
+            $user = request()->user();
             return response()->json([
-                'message' => 'Tenant identificado com sucesso!',
-                'tenant_name' => $tenant->name,
-                'tenant_id' => $tenant->id,
+                'message' => 'Acesso Duplo Concedido! Tenant + User identificados.',
+                'tenant' => $tenant->name,
+                'user' => $user->name,
+                'scopes' => $user->currentAccessToken()->abilities,
             ]);
-        });
+        })->middleware('ability:patient:read');
+
     });
 });
