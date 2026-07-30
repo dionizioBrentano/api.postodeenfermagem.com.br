@@ -46,6 +46,9 @@ Route::prefix('v1')->group(function () {
 
         // Rota de pacientes (nova para o teste do Sprint 2)
         Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
+    
+        // Rota de Logs (Para Debug)
+        Route::get('/logs', [\App\Http\Controllers\LogViewerController::class, 'index']);
     });
 
 
