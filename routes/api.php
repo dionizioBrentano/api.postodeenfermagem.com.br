@@ -44,9 +44,17 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/mfa/verify', [AuthController::class, 'verifyMfa']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-        // Rota de pacientes (nova para o teste do Sprint 2)
-        Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
-    
-        // Rota de Logs (Para Debug)
+        // ==========================================
+        // PATIENT ROUTES (Sprint 2 - dados criptografados por registro)
+        // ==========================================
+        Route::middleware('ability:patient:read')->group(function () {
+            Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
+            Route::get('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'show']);
+            Route::get('/patients/lookup/cpf/{cpf}', [\App\Http\Controllers\PatientController::class, 'findByCpf']);
+        });
+
+        Route::middleware('ability:patient:write')->group(function () {
+            Route::post('/patients', [\App\Http\Controllers\PatientController::class, 'store']);
+        });
     });
 });

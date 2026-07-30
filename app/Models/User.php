@@ -2,17 +2,20 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedWithDek;
+use App\Services\TokenizationService;
+use App\Traits\HasEncryptedFields;
+use App\Traits\HasTenant;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Traits\HasTenant;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens, HasTenant, HasUuids, SoftDeletes;
+    use HasFactory, Notifiable, HasApiTokens, HasTenant, HasUuids, SoftDeletes, HasEncryptedFields;
 
     /**
      * The attributes that are mass assignable.
@@ -40,6 +43,7 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'mfa_secret',
+        'council_number_token',
     ];
 
     /**
@@ -53,6 +57,18 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'mfa_enabled' => 'boolean',
+            // Numero do conselho (CRM/COREN/etc.) nunca fica em texto puro.
+            'council_number' => EncryptedWithDek::class.':council_number_token',
         ];
+    }
+
+    /**
+     * Localiza um usuário pelo número do conselho profissional, via blind index.
+     */
+    public static function findByCouncilNumber(string $councilNumber): ?self
+    {
+        $token = app(TokenizationService::class)->tokenize($councilNumber);
+
+        return static::where('council_number_token', $token)->first();
     }
 }

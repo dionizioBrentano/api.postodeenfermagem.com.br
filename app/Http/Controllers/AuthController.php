@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use PragmaRX\Google2FA\Google2FA;
@@ -42,6 +43,9 @@ class AuthController extends Controller
         // Se MFA estiver habilitado, emitimos token de permissão restrita
         if ($user->mfa_enabled) {
             $token = $user->createToken('mfa-pending', ['mfa:verify'])->plainTextToken;
+
+            AuditService::logAs($user, 'login_mfa_pending', $user);
+
             return response()->json([
                 'message' => 'MFA required.',
                 'access_token' => $token,
@@ -52,6 +56,8 @@ class AuthController extends Controller
         // Sem MFA, emite token pleno
         $abilities = $this->getAbilitiesForUserType($user->user_type);
         $token = $user->createToken('access-token', $abilities)->plainTextToken;
+
+        AuditService::logAs($user, 'login', $user);
 
         return response()->json([
             'access_token' => $token,
@@ -121,6 +127,8 @@ class AuthController extends Controller
         $abilities = $this->getAbilitiesForUserType($user->user_type);
         $token = $user->createToken('access-token', $abilities)->plainTextToken;
 
+        AuditService::logAs($user, 'mfa_verified', $user);
+
         return response()->json([
             'access_token' => $token,
             'user' => $user,
@@ -130,7 +138,12 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+
+        AuditService::logAs($user, 'logout', $user);
+
+        $user->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Logout efetuado com sucesso.']);
     }
 }
