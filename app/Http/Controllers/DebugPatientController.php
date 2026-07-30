@@ -53,6 +53,24 @@ class DebugPatientController extends Controller
                 }
             }
 
+            // Teste de Round-trip (Criação e Leitura) no ambiente real
+            $roundTripSuccess = false;
+            $roundTripError = null;
+            try {
+                $testId = (string) \Illuminate\Support\Str::uuid();
+                $cryptoService = app(\App\Services\CryptoService::class);
+                $testDek = $cryptoService->getOrCreateDek($testId);
+                $testEncrypted = $cryptoService->encrypt("12345678900", $testDek);
+                $testDekRetrieved = $cryptoService->getDek($testId);
+                $testDecrypted = $cryptoService->decrypt($testEncrypted, $testDekRetrieved);
+                $roundTripSuccess = ($testDecrypted === "12345678900");
+                
+                // Cleanup do teste
+                DB::table('record_encryption_keys')->where('record_id', $testId)->delete();
+            } catch (\Exception $e) {
+                $roundTripError = $e->getMessage();
+            }
+
             return response()->json([
                 'patient_id' => $patient->id,
                 'raw_cpf' => $patient->cpf,
@@ -69,7 +87,9 @@ class DebugPatientController extends Controller
                     'iv' => isset($iv) ? strlen($iv) : null,
                     'tag' => isset($tag) ? strlen($tag) : null,
                     'ciphertext' => isset($ciphertext) ? strlen($ciphertext) : null,
-                ]
+                ],
+                'round_trip_success' => $roundTripSuccess,
+                'round_trip_error' => $roundTripError,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()]);
