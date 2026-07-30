@@ -1,0 +1,83 @@
+openapi: 3.0.3
+info:
+  title: Posto de Enfermagem API
+  description: API Whitelabel multi-tenant para registro seguro de dados de saúde
+  version: 1.0.0
+servers:
+  - url: https://api.postodeenfermagem.com.br/api/v1
+    description: Servidor de Produção
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-ID
+      description: ID do Tenant (Obrigatório para rotas autenticadas)
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Ocorreu um erro na solicitação."
+        errors:
+          type: object
+          description: "Detalhes dos erros de validação, se houver"
+          additionalProperties:
+            type: array
+            items:
+              type: string
+security:
+  - BearerAuth: []
+  - TenantHeader: []
+paths:
+  /health:
+    get:
+      summary: Health Check da API
+      description: Retorna o status operacional da API, sua versão, timestamp atual e se o banco de dados está acessível.
+      security: [] # Health check é público, logo removemos a exigência de segurança desta rota
+      responses:
+        '200':
+          description: API operacional e conectada ao banco de dados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  api_version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-07-30T09:12:41Z"
+                  database:
+                    type: string
+                    example: "connected"
+        '503':
+          description: Banco de dados indisponível (degradado).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "degraded"
+                  api_version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-07-30T09:12:41Z"
+                  database:
+                    type: string
+                    example: "disconnected"

@@ -1,0 +1,92 @@
+name: 🚀 Deploy to cPanel via SSH
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, zip, openssl, curl, xml, json, bcmath
+          
+      - name: 📦 Install Composer dependencies
+        run: |
+          composer install --no-dev --optimize-autoloader --prefer-dist
+          
+      - name: 📦 Build assets
+        run: |
+          npm install
+          npm run build
+          
+      - name: 🔑 Generate APP_KEY
+        run: |
+          php artisan key:generate --show
+          
+      - name: 🧹 Clear cache
+        run: |
+          php artisan config:clear
+          php artisan cache:clear
+          php artisan view:clear
+          php artisan route:clear
+          
+      - name: 📦 Create deployment package
+        run: |
+          tar -czf deploy.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            --exclude='storage/framework' \
+            --exclude='storage/logs' \
+            --exclude='*.md' \
+            --exclude='composer.json' \
+            --exclude='composer.lock' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='vite.config.js' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='.editorconfig' \
+            --exclude='phpunit.xml' \
+            .
+          
+      - name: 📤 Deploy via SSH
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          source: "deploy.tar.gz"
+          target: ${{ secrets.SSH_TARGET_DIR || '/home/seu_usuario/' }}
+          
+      - name: 🔄 Extract and setup on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            cd ${{ secrets.SSH_TARGET_DIR || '/home/seu_usuario/api.postodeenfermagem.com.br' }}
+            tar -xzf ../deploy.tar.gz .
+            rm ../deploy.tar.gz
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan optimize
+            chmod -R 775 storage bootstrap/cache
+            chown -R ${{ secrets.SSH_USERNAME }}:${{ secrets.SSH_USERNAME }} .

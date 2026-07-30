@@ -1,0 +1,91 @@
+name: 🚀 Deploy to cPanel
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 🔧 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, zip, openssl, curl, xml, json, bcmath
+          
+      - name: 📦 Install Composer dependencies
+        run: |
+          composer install --no-dev --optimize-autoloader --prefer-dist
+        
+      - name: 📦 Install NPM dependencies
+        run: |
+          npm install
+          npm run build
+          
+      - name: 🔑 Generate APP_KEY
+        run: |
+          php artisan key:generate --show
+          
+      - name: 🧹 Clear cache
+        run: |
+          php artisan config:clear
+          php artisan cache:clear
+          php artisan view:clear
+          php artisan route:clear
+          
+      - name: 🧪 Run tests (opcional)
+        run: |
+          php artisan test
+        continue-on-error: true
+        
+      - name: 📤 Deploy to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+          port: ${{ secrets.FTP_PORT || '21' }}
+          local-dir: ./
+          server-dir: ${{ secrets.FTP_SERVER_DIR || './public_html/' }}
+          exclude: |
+            .git/
+            .github/
+            .env
+            .env.*
+            .gitignore
+            .gitattributes
+            .editorconfig
+            .vscode/
+            .idea/
+            node_modules/
+            tests/
+            storage/framework/
+            storage/logs/
+            .env.backup
+            .phpunit.cache
+            docker/
+            docker-compose.yml
+            phpunit.xml
+            *.md
+            composer.json
+            composer.lock
+            package.json
+            package-lock.json
+            vite.config.js
+            .npmrc
+            .php-version
+            .tool-versions
+          clean-exclude: |
+            .env
+            storage/
+            vendor/
+            public/build/
+            public/vendor/
+            bootstrap/cache/
