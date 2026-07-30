@@ -36,9 +36,16 @@ Route::prefix('v1')->group(function () {
 
     // Requer Autenticação Básica (MFA Steps, Logout)
     Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/user', function (Request $request) {
+            return $request->user();
+        });
+
         Route::post('/auth/mfa/setup', [AuthController::class, 'setupMfa']);
         Route::post('/auth/mfa/verify', [AuthController::class, 'verifyMfa']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+        // Rota de pacientes (nova para o teste do Sprint 2)
+        Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
     });
 
 
