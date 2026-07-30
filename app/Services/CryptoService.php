@@ -40,12 +40,22 @@ class CryptoService
      */
     public function getOrCreateDek(string $recordId): string
     {
-        $keyRecord = RecordEncryptionKey::firstOrCreate(
-            ['record_id' => $recordId],
-            ['encrypted_dek' => $this->kekEncrypter->encrypt(random_bytes(32))]
-        );
+        $keyRecord = RecordEncryptionKey::where('record_id', $recordId)->first();
+        if ($keyRecord) {
+            $decrypted = $this->kekEncrypter->decrypt($keyRecord->encrypted_dek);
+            return strlen($decrypted) === 32 ? $decrypted : base64_decode($decrypted);
+        }
 
-        return $this->kekEncrypter->decrypt($keyRecord->encrypted_dek);
+        $dek = random_bytes(32);
+        // Codifica em Base64 antes de criptografar com KEK para evitar qualquer problema de charset no banco
+        $encryptedDek = $this->kekEncrypter->encrypt(base64_encode($dek));
+
+        RecordEncryptionKey::create([
+            'record_id' => $recordId,
+            'encrypted_dek' => $encryptedDek
+        ]);
+
+        return $dek;
     }
 
     /**
@@ -56,7 +66,13 @@ class CryptoService
         $keyRecord = RecordEncryptionKey::where('record_id', $recordId)->first();
         if (!$keyRecord) return null;
 
-        return $this->kekEncrypter->decrypt($keyRecord->encrypted_dek);
+        try {
+            $decrypted = $this->kekEncrypter->decrypt($keyRecord->encrypted_dek);
+            // Suporta tanto a versao antiga (binaria) quanto a nova (base64)
+            return strlen($decrypted) === 32 ? $decrypted : base64_decode($decrypted);
+        } catch (Exception $e) {
+            return null;
+        }
     }
 
     /**
@@ -90,8 +106,8 @@ class CryptoService
             throw new Exception("Falha ao criptografar o dado com AES-256-GCM.");
         }
 
-        // Retorna Base64(IV . Ciphertext . Tag)
-        return base64_encode($iv . $ciphertext . $tag);
+        // Retorna formato blindado: Base64(IV) . Base64(Ciphertext) . Base64(Tag)
+        return base64_encode($iv) . '.' . base64_encode($ciphertext) . '.' . base64_encode($tag);
     }
 
     /**
@@ -99,12 +115,22 @@ class CryptoService
      */
     public function decrypt(string $encryptedPayload, string $dek): ?string
     {
-        $decoded = base64_decode($encryptedPayload);
-        if ($decoded === false) return null;
-
-        $iv = substr($decoded, 0, self::IV_LENGTH);
-        $tag = substr($decoded, -self::TAG_LENGTH);
-        $ciphertext = substr($decoded, self::IV_LENGTH, -self::TAG_LENGTH);
+        if (!str_contains($encryptedPayload, '.')) {
+            // Suporte ao formato antigo concatenado
+            $decoded = base64_decode($encryptedPayload);
+            if ($decoded === false) return null;
+            $iv = substr($decoded, 0, self::IV_LENGTH);
+            $tag = substr($decoded, -self::TAG_LENGTH);
+            $ciphertext = substr($decoded, self::IV_LENGTH, -self::TAG_LENGTH);
+        } else {
+            // Novo formato blindado e seccionado
+            $parts = explode('.', $encryptedPayload);
+            if (count($parts) !== 3) return null;
+            
+            $iv = base64_decode($parts[0]);
+            $ciphertext = base64_decode($parts[1]);
+            $tag = base64_decode($parts[2]);
+        }
 
         if (strlen($iv) !== self::IV_LENGTH || strlen($tag) !== self::TAG_LENGTH) {
             return null; // Payload corrompido
