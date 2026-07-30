@@ -45,16 +45,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
         // ==========================================
-        // PATIENT ROUTES (Sprint 2 - dados criptografados por registro)
+        // DASHBOARD / TEST ROUTES
         // ==========================================
-        Route::middleware('ability:patient:read')->group(function () {
-            Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
-            Route::get('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'show']);
-            Route::get('/patients/lookup/cpf/{cpf}', [\App\Http\Controllers\PatientController::class, 'findByCpf']);
-        });
-
-        Route::middleware('ability:patient:write')->group(function () {
-            Route::post('/patients', [\App\Http\Controllers\PatientController::class, 'store']);
+        Route::get('/dashboard/status', function (Request $request) {
+            return response()->json([
+                'user' => clone $request->user(),
+                'tenant' => $request->user()->tenant,
+                'scopes' => $request->user()->currentAccessToken()->abilities ?? [],
+                'status' => 'Conexão Autenticada e Segura!',
+            ]);
         });
     });
 });
