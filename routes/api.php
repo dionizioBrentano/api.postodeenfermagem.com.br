@@ -48,5 +48,5 @@ Route::prefix('v1')->group(function () {
         Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
     
         // Rota de Logs (Para Debug)
-        
+    });
 });
