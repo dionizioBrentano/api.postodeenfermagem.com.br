@@ -23,12 +23,7 @@ class DebugPatientController extends Controller
             if ($dekRecord) {
                 try {
                     $cryptoService = app(\App\Services\CryptoService::class);
-                    // Pega o DEK raw usando o encrypter
-                    $kekEncrypter = new \Illuminate\Encryption\Encrypter(
-                        env('APP_KEK') ?: \Illuminate\Support\Facades\Config::get('app.key'),
-                        \Illuminate\Support\Facades\Config::get('app.cipher', 'AES-256-CBC')
-                    );
-                    $dek = $kekEncrypter->decrypt($dekRecord->encrypted_dek);
+                    $dek = $cryptoService->getDek($patient->id);
                     
                     // Manual decrypt logic
                     $decoded = base64_decode($patient->cpf);
