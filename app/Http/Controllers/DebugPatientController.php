@@ -68,6 +68,13 @@ class DebugPatientController extends Controller
                 'raw_dek' => $dekRecord ? $dekRecord->encrypted_dek : null,
                 'debug_decrypted_cpf' => $debugDecryptedCpf,
                 'openssl_error' => $opensslError,
+                'lengths' => [
+                    'dek' => isset($dek) ? strlen($dek) : null,
+                    'decoded' => isset($decoded) ? strlen($decoded) : null,
+                    'iv' => isset($iv) ? strlen($iv) : null,
+                    'tag' => isset($tag) ? strlen($tag) : null,
+                    'ciphertext' => isset($ciphertext) ? strlen($ciphertext) : null,
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()]);
