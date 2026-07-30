@@ -28,7 +28,7 @@ class EncryptedWithDek implements CastsAttributes
         }
 
         $idField = $this->dekKey ?: $model->getKeyName();
-        $recordId = $model->{$idField};
+        $recordId = $model->getAttribute($idField);
 
         if (empty($recordId)) {
             return $value; // Fallback se nao houver ID
@@ -59,11 +59,11 @@ class EncryptedWithDek implements CastsAttributes
         $idField = $this->dekKey ?: $model->getKeyName();
 
         // Se o field for a primary key e estiver vazio, tenta gerar
-        if ($idField === $model->getKeyName() && empty($model->{$idField})) {
-            $model->{$idField} = (string) Str::uuid();
+        if ($idField === $model->getKeyName() && empty($model->getAttribute($idField))) {
+            $model->setAttribute($idField, (string) Str::uuid());
         }
 
-        $recordId = $model->{$idField};
+        $recordId = $model->getAttribute($idField);
 
         if (empty($recordId)) {
              throw new \Exception("Nao e possivel criptografar: $idField ausente no modelo.");
