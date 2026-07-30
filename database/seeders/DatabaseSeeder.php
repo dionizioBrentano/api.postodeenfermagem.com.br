@@ -67,12 +67,6 @@ class DatabaseSeeder extends Seeder
             'mfa_enabled' => false,
         ]);
 
-        // 5. Criar Paciente para validar Criptografia DEK e Blind Index
-        \App\Models\Patient::create([
-            'tenant_id' => $tenant->id,
-            'name' => 'João da Silva',
-            'cpf' => '12345678900', // Será criptografado pelo Cast e gerará o cpf_token
-            'cns' => '700000000000000',
-        ]);
+        // Fim do Seeder
     }
 }
