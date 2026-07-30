@@ -49,6 +49,9 @@ Route::prefix('v1')->group(function () {
     
         // Rota de Logs (Para Debug)
         Route::get('/logs', [\App\Http\Controllers\LogViewerController::class, 'index']);
+
+        // Rota de Debug Patient
+        Route::get('/debug-patient', [\App\Http\Controllers\DebugPatientController::class, 'index']);
     });
 
 
