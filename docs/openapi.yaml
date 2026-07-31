@@ -16,7 +16,7 @@ components:
       type: apiKey
       in: header
       name: X-Tenant-ID
-      description: ID do Tenant (Obrigatório para rotas autenticadas)
+      description: ID do Tenant (Obrigatório para quase todas as rotas)
   schemas:
     ErrorResponse:
       type: object
@@ -38,46 +38,152 @@ paths:
   /health:
     get:
       summary: Health Check da API
-      description: Retorna o status operacional da API, sua versão, timestamp atual e se o banco de dados está acessível.
-      security: [] # Health check é público, logo removemos a exigência de segurança desta rota
+      security: []
       responses:
         '200':
-          description: API operacional e conectada ao banco de dados.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  api_version:
-                    type: string
-                    example: "1.0.0"
-                  timestamp:
-                    type: string
-                    format: date-time
-                    example: "2026-07-30T09:12:41Z"
-                  database:
-                    type: string
-                    example: "connected"
-        '503':
-          description: Banco de dados indisponível (degradado).
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "degraded"
-                  api_version:
-                    type: string
-                    example: "1.0.0"
-                  timestamp:
-                    type: string
-                    format: date-time
-                    example: "2026-07-30T09:12:41Z"
-                  database:
-                    type: string
-                    example: "disconnected"
+          description: API operacional
+  /auth/login:
+    post:
+      summary: Autenticação de Usuário
+      security:
+        - TenantHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Sucesso (Retorna Token JWT)
+  /auth/register:
+    post:
+      summary: Registro de Usuário
+      security:
+        - TenantHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                password_confirmation:
+                  type: string
+                user_type:
+                  type: string
+                  enum: [professional, admin]
+      responses:
+        '201':
+          description: Usuário criado
+  /auth/mfa/setup:
+    post:
+      summary: Configuração de MFA (TOTP)
+      responses:
+        '200':
+          description: Retorna secret e QR code
+  /auth/mfa/verify:
+    post:
+      summary: Verificação de MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                totp_code:
+                  type: string
+      responses:
+        '200':
+          description: Token final emitido
+  /auth/logout:
+    post:
+      summary: Deslogar usuário
+      responses:
+        '200':
+          description: Logout efetuado
+  /patients:
+    get:
+      summary: Listar Pacientes
+      responses:
+        '200':
+          description: Lista de pacientes
+    post:
+      summary: Criar Paciente
+      responses:
+        '201':
+          description: Paciente criado
+  /patients/{patient}/encounters:
+    get:
+      summary: Listar Atendimentos do Paciente
+      parameters:
+        - in: path
+          name: patient
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de atendimentos
+    post:
+      summary: Criar Atendimento
+      parameters:
+        - in: path
+          name: patient
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Atendimento criado
+  /patients/{patient}/encounters/{encounter}/observations:
+    get:
+      summary: Listar Observações (Sinais Vitais e Evolução)
+      parameters:
+        - in: path
+          name: patient
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: encounter
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de observações
+    post:
+      summary: Registrar Observação (Sinais Vitais / Evolução)
+      parameters:
+        - in: path
+          name: patient
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: encounter
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Observação criada

@@ -20,21 +20,61 @@ class AuthController extends Controller
     private function getAbilitiesForUserType(string $userType): array
     {
         return match ($userType) {
-            'admin' => ['tenant:admin', 'audit:read'],
+            'admin' => ['tenant:admin', 'audit:read', 'patient:read', 'patient:write'],
             'professional' => ['patient:read', 'patient:write', 'clinical:read', 'clinical:write', 'consent:read'],
             'patient' => ['patient:read', 'consent:read', 'consent:write'],
             default => [],
         };
     }
 
+    public function register(Request $request)
+    {
+        $tenant = app('tenant');
+        if (!$tenant) {
+            return response()->json(['message' => 'Tenant obrigatório.'], 400);
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => [
+                'required',
+                'email',
+                \Illuminate\Validation\Rule::unique('users')->where(function ($query) use ($tenant) {
+                    return $query->where('tenant_id', $tenant->id);
+                })
+            ],
+            'password' => 'required|confirmed|min:8',
+            'user_type' => 'required|in:professional,admin'
+        ]);
+
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'user_type' => $request->user_type,
+        ]);
+
+        AuditService::logAs($user, 'registered', $user);
+
+        return response()->json(['message' => 'Usuário registrado com sucesso.', 'user' => $user], 201);
+    }
+
     public function login(Request $request)
     {
+        $tenant = app('tenant');
+        if (!$tenant) {
+            return response()->json(['message' => 'Tenant obrigatório.'], 400);
+        }
+
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)
+            ->where('tenant_id', $tenant->id)
+            ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Credenciais inválidas.'], 401);

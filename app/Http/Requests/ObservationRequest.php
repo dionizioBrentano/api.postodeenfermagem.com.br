@@ -14,7 +14,6 @@ class ObservationRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'encounter_id' => ['required', 'uuid', 'exists:encounters,id'],
             'type' => ['required', 'in:vital-signs,evolution,other'],
             'recorded_at' => ['required', 'date'],
             'content' => ['required'], // String or Array/JSON

@@ -31,12 +31,15 @@ Route::prefix('v1')->group(function () {
     // Application Auth (M2M)
     Route::post('/auth/application/token', [ApplicationAuthController::class, 'token']);
 
-    // User Login (Público)
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    // User Registration & Login (Público, mas exige tenant)
+    Route::middleware('tenant')->group(function () {
+        Route::post('/auth/register', [AuthController::class, 'register']);
+        Route::post('/auth/login', [AuthController::class, 'login']);
+    });
 
     // Requer Autenticação Básica (MFA Steps, Logout)
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/user', function (Request $request) {
+    Route::middleware(['tenant', 'auth:sanctum'])->group(function () {
+        Route::get('/user', function (\Illuminate\Http\Request $request) {
             return $request->user();
         });
 

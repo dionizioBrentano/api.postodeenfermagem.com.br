@@ -57,6 +57,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'mfa_enabled' => 'boolean',
+            'mfa_secret' => EncryptedWithDek::class,
             // Numero do conselho (CRM/COREN/etc.) nunca fica em texto puro.
             'council_number' => EncryptedWithDek::class.':council_number_token',
         ];
