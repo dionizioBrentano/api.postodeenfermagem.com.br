@@ -96,6 +96,26 @@ class DatabaseSeeder extends Seeder
                 ['name' => 'Roberto Dias', 'cpf' => '999.000.111-22', 'cns' => '700000000000010'],
             ],
         );
+
+        // ==========================================
+        // 4. DADOS CLÍNICOS E VÍNCULOS
+        // ==========================================
+        $this->call(ClinicalDemoSeeder::class);
+
+        $tenantVida = Tenant::where('slug', 'hospital-vida')->first();
+        if ($tenantVida) {
+            $this->command->info("");
+            $this->command->info("=== CREDENCIAIS DE DEMONSTRAÇÃO ===");
+            $this->command->info("Tenant: Hospital Vida");
+            $this->command->info("Tenant ID: {$tenantVida->id}");
+            $this->command->info("client_id: frontend-app-vida");
+            $this->command->info("client_secret: secret123");
+            $this->command->info("Login: house@hospitalvida.com.br");
+            $this->command->info("Senha: password");
+            $this->command->info("Paciente teste CPF: 222.333.444-55");
+            $this->command->info("==================================");
+            $this->command->info("");
+        }
     }
 
     /**
