@@ -22,6 +22,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Log Viewer (debug endpoint)
+    |--------------------------------------------------------------------------
+    |
+    | Habilita os endpoints /api/v1/admin/logs (GET/DELETE) que expõem o final
+    | de storage/logs/laravel.log via HTTP, para não precisar de SSH toda hora
+    | durante o desenvolvimento. Protegido por auth:sanctum + ability
+    | "tenant:admin". Desligue (false) ou remova as rotas quando não precisar
+    | mais — é uma ferramenta de debug, não algo para deixar ligado
+    | permanentemente em produção com dados reais de pacientes.
+    |
+    */
+
+    'viewer_enabled' => (bool) env('LOG_VIEWER_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Deprecations Log Channel
     |--------------------------------------------------------------------------
     |

@@ -58,4 +58,19 @@ class Patient extends Model
 
         return static::where('cns_token', $token)->first();
     }
+
+    public function consents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Consent::class);
+    }
+
+    public function validConsent(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Consent::class)
+            ->where('status', 'valid')
+            ->where(function ($query) {
+                $query->whereNull('valid_until')
+                      ->orWhere('valid_until', '>', now());
+            })->latest();
+    }
 }

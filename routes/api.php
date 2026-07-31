@@ -46,15 +46,45 @@ Route::prefix('v1')->group(function () {
 
         // ==========================================
         // PATIENT ROUTES (Sprint 2 - dados criptografados por registro)
+        // "tenant" middleware aqui garante que o global scope da HasTenant
+        // realmente filtre por tenant (sem ele, app('tenant') nunca fica
+        // definido nessas rotas e o isolamento multi-tenant não é aplicado).
         // ==========================================
-        Route::middleware('ability:patient:read')->group(function () {
+        Route::middleware(['tenant', 'ability:patient:read'])->group(function () {
             Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
-            Route::get('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'show']);
-            Route::get('/patients/lookup/cpf/{cpf}', [\App\Http\Controllers\PatientController::class, 'findByCpf']);
+            Route::get('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'show'])->middleware('lgpd.consent');
+            Route::get('/patients/lookup/cpf/{cpf}', [\App\Http\Controllers\PatientController::class, 'findByCpf'])->middleware('lgpd.consent');
+            
+            // Vínculos Profissional-Paciente (Read)
+            Route::get('/patients/{patient}/professionals', [\App\Http\Controllers\PatientUserController::class, 'index'])->middleware('lgpd.consent');
+            Route::get('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'show'])->middleware('lgpd.consent');
+            
+            // LGPD Consents (Read)
+            Route::get('/patients/{patient}/consents', [\App\Http\Controllers\ConsentController::class, 'index']);
+            Route::get('/patients/{patient}/consents/{id}', [\App\Http\Controllers\ConsentController::class, 'show']);
         });
 
-        Route::middleware('ability:patient:write')->group(function () {
+        Route::middleware(['tenant', 'ability:patient:write'])->group(function () {
             Route::post('/patients', [\App\Http\Controllers\PatientController::class, 'store']);
+            Route::put('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'update'])->middleware('lgpd.consent');
+            Route::delete('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'destroy'])->middleware('lgpd.consent');
+            
+            // Vínculos Profissional-Paciente (Write)
+            Route::post('/patients/{patient}/professionals', [\App\Http\Controllers\PatientUserController::class, 'store'])->middleware('lgpd.consent');
+            Route::put('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'update'])->middleware('lgpd.consent');
+            Route::delete('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'destroy'])->middleware('lgpd.consent');
+            
+            // LGPD Consents (Write)
+            Route::post('/patients/{patient}/consents', [\App\Http\Controllers\ConsentController::class, 'store']);
+            Route::patch('/patients/{patient}/consents/{id}/revoke', [\App\Http\Controllers\ConsentController::class, 'revoke']);
+        });
+
+        // ==========================================
+        // LOG VIEWER (debug — desligado por padrão via LOG_VIEWER_ENABLED)
+        // ==========================================
+        Route::middleware('ability:tenant:admin')->prefix('admin')->group(function () {
+            Route::get('/logs', [\App\Http\Controllers\Admin\LogViewerController::class, 'tail']);
+            Route::delete('/logs', [\App\Http\Controllers\Admin\LogViewerController::class, 'clear']);
         });
     });
 });

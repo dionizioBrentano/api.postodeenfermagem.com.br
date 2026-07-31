@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'require_app_token' => \App\Http\Middleware\RequireApplicationToken::class,
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+            'lgpd.consent' => \App\Http\Middleware\CheckPatientConsent::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

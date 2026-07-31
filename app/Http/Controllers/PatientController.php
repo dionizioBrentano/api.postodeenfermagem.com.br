@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Patient;
 use App\Services\AuditService;
+use App\Http\Requests\PatientRequest;
 use Illuminate\Http\Request;
 
 class PatientController extends Controller
@@ -25,13 +26,9 @@ class PatientController extends Controller
         return response()->json($patients);
     }
 
-    public function store(Request $request)
+    public function store(PatientRequest $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'cpf' => 'required|string',
-            'cns' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         $patient = Patient::create($data);
 
@@ -45,6 +42,28 @@ class PatientController extends Controller
         AuditService::log('accessed', $patient);
 
         return response()->json($patient);
+    }
+
+    public function update(PatientRequest $request, string $id)
+    {
+        $patient = Patient::findOrFail($id);
+        $data = $request->validated();
+
+        $patient->update($data);
+
+        AuditService::log('updated', $patient);
+
+        return response()->json($patient);
+    }
+
+    public function destroy(string $id)
+    {
+        $patient = Patient::findOrFail($id);
+        $patient->delete();
+
+        AuditService::log('deleted', $patient);
+
+        return response()->json(null, 204);
     }
 
     /**
