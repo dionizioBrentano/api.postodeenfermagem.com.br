@@ -24,6 +24,9 @@ class Observation extends Model
         'type',
         'content',
         'recorded_at',
+        'version',
+        'replaces_id',
+        'status',
     ];
 
     protected $casts = [

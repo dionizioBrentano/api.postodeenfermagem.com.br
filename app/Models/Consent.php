@@ -22,6 +22,20 @@ class Consent extends Model
         'data_categories',
         'valid_until',
         'revoked_at',
+        'context',
+        'consent_text_version',
+        'consent_text_hash',
+        'authenticated_with',
+        'accepted_at',
+        'denied_at',
+        'accepted_by_user_id',
+        'subject_user_id',
+        'professional_user_id',
+        'appointment_id',
+        'requires_dual_guardian',
+        'guardian_slot',
+        'paired_consent_id',
+        'metadata',
     ];
 
     protected $casts = [
@@ -29,6 +43,10 @@ class Consent extends Model
         'data_categories' => 'array',
         'valid_until' => 'datetime',
         'revoked_at' => 'datetime',
+        'metadata' => 'array',
+        'requires_dual_guardian' => 'boolean',
+        'accepted_at' => 'datetime',
+        'denied_at' => 'datetime',
     ];
 
     public function patient(): BelongsTo

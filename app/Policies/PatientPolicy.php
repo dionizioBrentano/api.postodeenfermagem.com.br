@@ -11,23 +11,38 @@ class PatientPolicy
 {
     use HandlesAuthorization;
 
-    /**
-     * Determine whether the user can access the clinical data (encounters, observations, etc.) of the patient.
-     * Checks if:
-     * 1. Patient belongs to the same tenant as the user (already handled by global scope usually, but good to assert).
-     * 2. The user has an ACTIVE link with the patient in the patient_user table.
-     */
     public function accessClinicalData(User $user, Patient $patient): bool
     {
-        if ($user->tenant_id !== $patient->tenant_id) {
-            return false;
-        }
+        return \App\Services\CareAuthorizationService::userCanAccessPatient($user, $patient, 'clinical:read');
+    }
 
-        $activeLink = PatientUser::where('user_id', $user->id)
-            ->where('patient_id', $patient->id)
-            ->where('ativo', true)
-            ->first();
+    public function viewPatient(User $user, Patient $patient): bool
+    {
+        return \App\Services\CareAuthorizationService::userCanAccessPatient($user, $patient, 'clinical:read');
+    }
 
-        return $activeLink !== null;
+    public function viewClinical(User $user, Patient $patient): bool
+    {
+        return \App\Services\CareAuthorizationService::userCanAccessPatient($user, $patient, 'clinical:read');
+    }
+
+    public function writeClinical(User $user, Patient $patient): bool
+    {
+        return \App\Services\CareAuthorizationService::userCanAccessPatient($user, $patient, 'clinical:write');
+    }
+
+    public function createRecord(User $user, Patient $patient): bool
+    {
+        return \App\Services\CareAuthorizationService::userCanAccessPatient($user, $patient, 'clinical:write');
+    }
+
+    public function viewRecord(User $user, $record): bool
+    {
+        return \App\Services\CareAuthorizationService::userCanAccessRecord($user, $record, 'clinical:read');
+    }
+
+    public function updateRecord(User $user, $record): bool
+    {
+        return \App\Services\CareAuthorizationService::userCanAccessRecord($user, $record, 'clinical:write');
     }
 }

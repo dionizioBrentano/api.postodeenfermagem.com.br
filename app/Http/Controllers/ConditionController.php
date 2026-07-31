@@ -15,7 +15,7 @@ class ConditionController extends Controller
     public function index(Request $request, string $patientId, string $encounterId)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
+        Gate::authorize('viewClinical', $patient);
         
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
 
@@ -33,7 +33,7 @@ class ConditionController extends Controller
     public function store(ConditionRequest $request, string $patientId, string $encounterId)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
+        Gate::authorize('createRecord', $patient);
         
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
 
@@ -51,10 +51,9 @@ class ConditionController extends Controller
     public function show(string $patientId, string $encounterId, string $id)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
-        
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
         $condition = Condition::where('encounter_id', $encounter->id)->findOrFail($id);
+        Gate::authorize('viewRecord', $condition);
 
         AuditService::log('accessed', $condition);
 
@@ -64,10 +63,9 @@ class ConditionController extends Controller
     public function update(ConditionRequest $request, string $patientId, string $encounterId, string $id)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
-        
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
         $condition = Condition::where('encounter_id', $encounter->id)->findOrFail($id);
+        Gate::authorize('updateRecord', $condition);
 
         $condition->update($request->validated());
         AuditService::log('updated', $condition);

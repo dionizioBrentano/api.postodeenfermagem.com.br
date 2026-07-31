@@ -38,6 +38,7 @@ class PatientController extends Controller
     public function show(string $id)
     {
         $patient = Patient::findOrFail($id);
+        \Illuminate\Support\Facades\Gate::authorize('viewPatient', $patient);
 
         AuditService::log('accessed', $patient);
 
@@ -77,6 +78,8 @@ class PatientController extends Controller
         if (! $patient) {
             return response()->json(['message' => 'Paciente não encontrado.'], 404);
         }
+        
+        \Illuminate\Support\Facades\Gate::authorize('viewPatient', $patient);
 
         AuditService::log('accessed', $patient);
 

@@ -14,7 +14,7 @@ class EncounterController extends Controller
     public function index(Request $request, string $patientId)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
+        Gate::authorize('viewClinical', $patient);
 
         $encounters = Encounter::where('patient_id', $patient->id)
             ->orderBy('start_time', 'desc')
@@ -30,7 +30,7 @@ class EncounterController extends Controller
     public function store(EncounterRequest $request, string $patientId)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
+        Gate::authorize('createRecord', $patient);
 
         $data = $request->validated();
         $data['patient_id'] = $patient->id;
@@ -49,9 +49,8 @@ class EncounterController extends Controller
     public function show(string $patientId, string $id)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
-
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($id);
+        Gate::authorize('viewRecord', $encounter);
         AuditService::log('accessed', $encounter);
 
         return response()->json($encounter);
@@ -60,9 +59,8 @@ class EncounterController extends Controller
     public function update(EncounterRequest $request, string $patientId, string $id)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
-
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($id);
+        Gate::authorize('updateRecord', $encounter);
         $encounter->update($request->validated());
 
         AuditService::log('updated', $encounter);

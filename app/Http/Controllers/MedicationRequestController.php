@@ -15,7 +15,7 @@ class MedicationRequestController extends Controller
     public function index(Request $request, string $patientId, string $encounterId)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
+        Gate::authorize('viewClinical', $patient);
         
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
 
@@ -33,7 +33,7 @@ class MedicationRequestController extends Controller
     public function store(StoreMedicationRequest $request, string $patientId, string $encounterId)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
+        Gate::authorize('createRecord', $patient);
         
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
 
@@ -51,10 +51,9 @@ class MedicationRequestController extends Controller
     public function show(string $patientId, string $encounterId, string $id)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
-        
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
         $medication = MedicationRequest::where('encounter_id', $encounter->id)->findOrFail($id);
+        Gate::authorize('viewRecord', $medication);
 
         AuditService::log('accessed', $medication);
 
@@ -64,10 +63,9 @@ class MedicationRequestController extends Controller
     public function update(StoreMedicationRequest $request, string $patientId, string $encounterId, string $id)
     {
         $patient = Patient::findOrFail($patientId);
-        Gate::authorize('accessClinicalData', $patient);
-        
         $encounter = Encounter::where('patient_id', $patient->id)->findOrFail($encounterId);
         $medication = MedicationRequest::where('encounter_id', $encounter->id)->findOrFail($id);
+        Gate::authorize('updateRecord', $medication);
 
         $medication->update($request->validated());
         AuditService::log('updated', $medication);

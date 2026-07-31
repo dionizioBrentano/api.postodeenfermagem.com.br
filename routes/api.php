@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ApplicationAuthController;
+use App\Http\Controllers\CareAuthorizationController;
 
 Route::prefix('v1')->group(function () {
     
@@ -55,19 +56,26 @@ Route::prefix('v1')->group(function () {
         // ==========================================
         Route::middleware(['tenant', 'ability:patient:read'])->group(function () {
             Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
-            Route::get('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'show'])->middleware('lgpd.consent');
-            Route::get('/patients/lookup/cpf/{cpf}', [\App\Http\Controllers\PatientController::class, 'findByCpf'])->middleware('lgpd.consent');
+            
+            // Rotas clínicas (autorização agora via Policy + CareAuthorizationService)
+            Route::get('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'show']);
+            Route::get('/patients/lookup/cpf/{cpf}', [\App\Http\Controllers\PatientController::class, 'findByCpf']);
             
             // Vínculos Profissional-Paciente (Read)
-            Route::get('/patients/{patient}/professionals', [\App\Http\Controllers\PatientUserController::class, 'index'])->middleware('lgpd.consent');
-            Route::get('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'show'])->middleware('lgpd.consent');
+            Route::get('/patients/{patient}/professionals', [\App\Http\Controllers\PatientUserController::class, 'index']);
+            Route::get('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'show']);
             
             // LGPD Consents (Read)
             Route::get('/patients/{patient}/consents', [\App\Http\Controllers\ConsentController::class, 'index']);
             Route::get('/patients/{patient}/consents/{id}', [\App\Http\Controllers\ConsentController::class, 'show']);
             
-            // PEP - Prontuário (Read - com LGPD Consent)
-            Route::middleware('lgpd.consent')->group(function () {
+            // Care Authorizations (Read)
+            Route::get('/patients/{patient}/care-authorizations', [CareAuthorizationController::class, 'index']);
+            Route::get('/patients/{patient}/care-authorizations/{id}', [CareAuthorizationController::class, 'show']);
+            
+            // PEP - Prontuário (Read)
+            // Acesso controlado via Policy + CareAuthorizationService (sem bloquear globalmente via LGPD Consent)
+            Route::group([], function () {
                 // Encounters
                 Route::get('/patients/{patient}/encounters', [\App\Http\Controllers\EncounterController::class, 'index']);
                 Route::get('/patients/{patient}/encounters/{id}', [\App\Http\Controllers\EncounterController::class, 'show']);
@@ -88,26 +96,34 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware(['tenant', 'ability:patient:write'])->group(function () {
             Route::post('/patients', [\App\Http\Controllers\PatientController::class, 'store']);
-            Route::put('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'update'])->middleware('lgpd.consent');
-            Route::delete('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'destroy'])->middleware('lgpd.consent');
+            Route::put('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'update']);
+            Route::delete('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'destroy']);
             
             // Vínculos Profissional-Paciente (Write)
-            Route::post('/patients/{patient}/professionals', [\App\Http\Controllers\PatientUserController::class, 'store'])->middleware('lgpd.consent');
-            Route::put('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'update'])->middleware('lgpd.consent');
-            Route::delete('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'destroy'])->middleware('lgpd.consent');
+            Route::post('/patients/{patient}/professionals', [\App\Http\Controllers\PatientUserController::class, 'store']);
+            Route::put('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'update']);
+            Route::delete('/patients/{patient}/professionals/{id}', [\App\Http\Controllers\PatientUserController::class, 'destroy']);
             
             // LGPD Consents (Write)
             Route::post('/patients/{patient}/consents', [\App\Http\Controllers\ConsentController::class, 'store']);
+            Route::post('/patients/{patient}/consents/{id}/accept', [\App\Http\Controllers\ConsentController::class, 'accept']);
+            Route::post('/patients/{patient}/consents/{id}/deny', [\App\Http\Controllers\ConsentController::class, 'deny']);
             Route::patch('/patients/{patient}/consents/{id}/revoke', [\App\Http\Controllers\ConsentController::class, 'revoke']);
             
-            // PEP - Prontuário (Write - com LGPD Consent)
-            Route::middleware('lgpd.consent')->group(function () {
+            // Care Authorizations (Write)
+            Route::post('/patients/{patient}/care-authorizations', [CareAuthorizationController::class, 'store']);
+            Route::post('/patients/{patient}/care-authorizations/{id}/revoke', [CareAuthorizationController::class, 'revoke']);
+            
+            // PEP - Prontuário (Write)
+            // Acesso controlado via Policy + CareAuthorizationService
+            Route::group([], function () {
                 // Encounters
                 Route::post('/patients/{patient}/encounters', [\App\Http\Controllers\EncounterController::class, 'store']);
                 Route::put('/patients/{patient}/encounters/{id}', [\App\Http\Controllers\EncounterController::class, 'update']);
                 
                 // Observations
                 Route::post('/patients/{patient}/encounters/{encounter}/observations', [\App\Http\Controllers\ObservationController::class, 'store']);
+                Route::put('/patients/{patient}/encounters/{encounter}/observations/{id}', [\App\Http\Controllers\ObservationController::class, 'update']);
                 
                 // Conditions
                 Route::post('/patients/{patient}/encounters/{encounter}/conditions', [\App\Http\Controllers\ConditionController::class, 'store']);

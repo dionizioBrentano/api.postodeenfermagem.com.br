@@ -36,6 +36,22 @@ class PatientUserController extends Controller
         // Como o Tenant já é setado automaticamente pela trait HasTenant ou pode ser explicitado
         $link = PatientUser::create($data);
 
+        // Mirror: gerar CareAuthorization implícita (retrocompatibilidade)
+        $grantee = \App\Models\User::find($data['user_id']);
+        if ($grantee) {
+            try {
+                \App\Services\CareAuthorizationService::grant(
+                    patient: $patient,
+                    grantor: $request->user(),
+                    grantee: $grantee,
+                    scopes: ['clinical:read', 'clinical:write', 'delegate'],
+                    reason: 'vínculo manual (PatientUser compat)'
+                );
+            } catch (\Exception $e) {
+                // Ignore exception if already exists or invalid grantor for mirroring
+            }
+        }
+
         return response()->json($link->load('user'), 201);
     }
 
