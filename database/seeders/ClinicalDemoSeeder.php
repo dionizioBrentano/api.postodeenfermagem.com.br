@@ -2,15 +2,15 @@
 
 namespace Database\Seeders;
 
-use App\Models\Tenant;
-use App\Models\User;
-use App\Models\Patient;
-use App\Models\PatientUser;
+use App\Models\Condition;
 use App\Models\Consent;
 use App\Models\Encounter;
-use App\Models\Observation;
-use App\Models\Condition;
 use App\Models\MedicationRequest;
+use App\Models\Observation;
+use App\Models\Patient;
+use App\Models\PatientUser;
+use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class ClinicalDemoSeeder extends Seeder
@@ -18,24 +18,23 @@ class ClinicalDemoSeeder extends Seeder
     public function run(): void
     {
         $tenant = Tenant::where('slug', 'hospital-vida')->first();
-        if (!$tenant) return;
+        if (! $tenant) {
+            return;
+        }
 
-        // Retrieve users
         $house = User::where('email', 'house@hospitalvida.com.br')->first();
         $jackie = User::where('email', 'jackie@hospitalvida.com.br')->first();
         $marcos = User::where('email', 'marcos@hospitalvida.com.br')->first();
 
-        // Retrieve patients (by CPF)
         $joao = Patient::findByCpf('222.333.444-55');
         $ana = Patient::findByCpf('333.444.555-66');
         $carlos = Patient::findByCpf('44455566677');
         $beatriz = Patient::findByCpf('555.666.777-88');
 
-        if (!$joao || !$ana || !$carlos || !$beatriz || !$house || !$jackie || !$marcos) {
+        if (! $joao || ! $ana || ! $carlos || ! $beatriz || ! $house || ! $jackie || ! $marcos) {
             return;
         }
 
-        // 3.1 Vínculos (patient_user)
         $vinculos = [
             ['patient_id' => $joao->id, 'user_id' => $house->id, 'tipo_vinculo' => 'medico_assistente'],
             ['patient_id' => $ana->id, 'user_id' => $house->id, 'tipo_vinculo' => 'medico_assistente'],
@@ -60,9 +59,7 @@ class ClinicalDemoSeeder extends Seeder
             );
         }
 
-        // 3.2 Consentimentos LGPD
-        $patients = [$joao, $ana, $carlos, $beatriz];
-        foreach ($patients as $p) {
+        foreach ([$joao, $ana, $carlos, $beatriz] as $p) {
             Consent::firstOrCreate(
                 [
                     'tenant_id' => $tenant->id,
@@ -78,7 +75,6 @@ class ClinicalDemoSeeder extends Seeder
             );
         }
 
-        // 1 consentimento revogado histórico para João
         Consent::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -93,8 +89,6 @@ class ClinicalDemoSeeder extends Seeder
             ]
         );
 
-        // 3.3 Encounters
-        // João 1 (finished)
         $encJoao1 = Encounter::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -109,7 +103,6 @@ class ClinicalDemoSeeder extends Seeder
             ]
         );
 
-        // João 2 (in-progress)
         $encJoao2 = Encounter::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -124,8 +117,7 @@ class ClinicalDemoSeeder extends Seeder
             ]
         );
 
-        // Ana (finished)
-        Encounter::firstOrCreate(
+        $encAna = Encounter::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
                 'patient_id' => $ana->id,
@@ -139,7 +131,6 @@ class ClinicalDemoSeeder extends Seeder
             ]
         );
 
-        // Carlos (in-progress)
         Encounter::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -154,8 +145,6 @@ class ClinicalDemoSeeder extends Seeder
             ]
         );
 
-        // 3.4 Observations
-        // João 1 (finished)
         Observation::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -174,6 +163,8 @@ class ClinicalDemoSeeder extends Seeder
                     'spo2' => 98,
                 ]),
                 'recorded_at' => now()->subDays(2)->setTime(10, 5),
+                'status' => 'active',
+                'version' => 1,
             ]
         );
 
@@ -188,10 +179,11 @@ class ClinicalDemoSeeder extends Seeder
             [
                 'content' => 'Paciente refere cefaleia leve há 2 dias. Sem febre. Orientado hidratação e observação.',
                 'recorded_at' => now()->subDays(2)->setTime(10, 20),
+                'status' => 'active',
+                'version' => 1,
             ]
         );
 
-        // João 2 (in-progress)
         Observation::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -210,10 +202,11 @@ class ClinicalDemoSeeder extends Seeder
                     'spo2' => 97,
                 ]),
                 'recorded_at' => now()->subMinutes(25),
+                'status' => 'active',
+                'version' => 1,
             ]
         );
 
-        // 3.5 Conditions
         Condition::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -228,6 +221,7 @@ class ClinicalDemoSeeder extends Seeder
             ]
         );
 
+        // encounter_id é NOT NULL no schema — usar encounter da Ana
         Condition::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -236,13 +230,12 @@ class ClinicalDemoSeeder extends Seeder
                 'code' => 'I10',
             ],
             [
-                'encounter_id' => null,
+                'encounter_id' => $encAna->id,
                 'description' => 'Hipertensão essencial (primária)',
                 'status' => 'active',
             ]
         );
 
-        // 3.6 MedicationRequests
         MedicationRequest::firstOrCreate(
             [
                 'tenant_id' => $tenant->id,
@@ -264,7 +257,7 @@ class ClinicalDemoSeeder extends Seeder
                 'medication_details' => 'Losartana 50mg — 1 comprimido pela manhã — uso contínuo',
             ],
             [
-                'encounter_id' => null,
+                'encounter_id' => $encAna->id,
                 'status' => 'active',
             ]
         );
