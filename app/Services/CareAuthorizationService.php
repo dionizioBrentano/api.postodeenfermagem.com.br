@@ -11,9 +11,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 
 class CareAuthorizationService
 {
-    /**
-     * Grant care authorization.
-     */
     public static function grant(
         Patient $patient,
         User $grantor,
@@ -42,8 +39,13 @@ class CareAuthorizationService
             ->where('status', 'active')
             ->first();
 
+        // Idempotente: accept/seed não devem gerar 500 se já existe authorization
         if ($existing) {
-            throw new \InvalidArgumentException('Grantee already has an active authorization for this patient.');
+            if ($sourceConsent && ! $existing->source_consent_id) {
+                $existing->update(['source_consent_id' => $sourceConsent->id]);
+            }
+
+            return $existing;
         }
 
         $auth = CareAuthorization::create([
@@ -109,7 +111,6 @@ class CareAuthorizationService
             return false;
         }
 
-        // Admin do tenant (ability no token OU user_type) — sem hasRole (método inexistente)
         if (self::isTenantAdmin($user)) {
             return true;
         }
@@ -126,7 +127,6 @@ class CareAuthorizationService
 
             $scopes = is_array($auth->scope) ? $auth->scope : [];
 
-            // clinical:write implica clinical:read
             if (in_array($needScope, $scopes, true)) {
                 return true;
             }
@@ -135,13 +135,10 @@ class CareAuthorizationService
             }
         }
 
-        // Compat MVP: vínculo patient_user ativo = read+write
-        $activeLink = PatientUser::where('user_id', $user->id)
+        return PatientUser::where('user_id', $user->id)
             ->where('patient_id', $patient->id)
             ->where('ativo', true)
             ->exists();
-
-        return $activeLink;
     }
 
     public static function userCanAccessRecord(User $user, $record, string $needScope = 'clinical:read'): bool
@@ -165,7 +162,7 @@ class CareAuthorizationService
                 return true;
             }
         } catch (\Throwable $e) {
-            // token ausente em alguns contextos
+            // token ausente
         }
 
         return isset($user->user_type) && $user->user_type === 'admin' && $user->tenant_id !== null;
@@ -173,11 +170,6 @@ class CareAuthorizationService
 
     private static function grantorHasPower(User $grantor, Patient $patient, ?Consent $sourceConsent = null): bool
     {
-        if ($sourceConsent && method_exists($sourceConsent, 'isValid') && $sourceConsent->isValid()) {
-            return true;
-        }
-
-        // Fluxo system/consent acabou de ser aceito (status valid)
         if ($sourceConsent && $sourceConsent->status === 'valid') {
             return true;
         }
