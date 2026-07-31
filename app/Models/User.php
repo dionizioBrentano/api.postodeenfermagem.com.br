@@ -71,4 +71,24 @@ class User extends Authenticatable
 
         return static::where('council_number_token', $token)->first();
     }
+
+    public function encounters(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Encounter::class);
+    }
+
+    public function observations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Observation::class);
+    }
+
+    public function conditions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Condition::class);
+    }
+
+    public function medicationRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MedicationRequest::class);
+    }
 }

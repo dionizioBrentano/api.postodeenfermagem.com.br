@@ -62,6 +62,25 @@ Route::prefix('v1')->group(function () {
             // LGPD Consents (Read)
             Route::get('/patients/{patient}/consents', [\App\Http\Controllers\ConsentController::class, 'index']);
             Route::get('/patients/{patient}/consents/{id}', [\App\Http\Controllers\ConsentController::class, 'show']);
+            
+            // PEP - Prontuário (Read - com LGPD Consent)
+            Route::middleware('lgpd.consent')->group(function () {
+                // Encounters
+                Route::get('/patients/{patient}/encounters', [\App\Http\Controllers\EncounterController::class, 'index']);
+                Route::get('/patients/{patient}/encounters/{id}', [\App\Http\Controllers\EncounterController::class, 'show']);
+                
+                // Observations
+                Route::get('/patients/{patient}/encounters/{encounter}/observations', [\App\Http\Controllers\ObservationController::class, 'index']);
+                Route::get('/patients/{patient}/encounters/{encounter}/observations/{id}', [\App\Http\Controllers\ObservationController::class, 'show']);
+                
+                // Conditions
+                Route::get('/patients/{patient}/encounters/{encounter}/conditions', [\App\Http\Controllers\ConditionController::class, 'index']);
+                Route::get('/patients/{patient}/encounters/{encounter}/conditions/{id}', [\App\Http\Controllers\ConditionController::class, 'show']);
+                
+                // Medications
+                Route::get('/patients/{patient}/encounters/{encounter}/medications', [\App\Http\Controllers\MedicationRequestController::class, 'index']);
+                Route::get('/patients/{patient}/encounters/{encounter}/medications/{id}', [\App\Http\Controllers\MedicationRequestController::class, 'show']);
+            });
         });
 
         Route::middleware(['tenant', 'ability:patient:write'])->group(function () {
@@ -77,6 +96,24 @@ Route::prefix('v1')->group(function () {
             // LGPD Consents (Write)
             Route::post('/patients/{patient}/consents', [\App\Http\Controllers\ConsentController::class, 'store']);
             Route::patch('/patients/{patient}/consents/{id}/revoke', [\App\Http\Controllers\ConsentController::class, 'revoke']);
+            
+            // PEP - Prontuário (Write - com LGPD Consent)
+            Route::middleware('lgpd.consent')->group(function () {
+                // Encounters
+                Route::post('/patients/{patient}/encounters', [\App\Http\Controllers\EncounterController::class, 'store']);
+                Route::put('/patients/{patient}/encounters/{id}', [\App\Http\Controllers\EncounterController::class, 'update']);
+                
+                // Observations
+                Route::post('/patients/{patient}/encounters/{encounter}/observations', [\App\Http\Controllers\ObservationController::class, 'store']);
+                
+                // Conditions
+                Route::post('/patients/{patient}/encounters/{encounter}/conditions', [\App\Http\Controllers\ConditionController::class, 'store']);
+                Route::put('/patients/{patient}/encounters/{encounter}/conditions/{id}', [\App\Http\Controllers\ConditionController::class, 'update']);
+                
+                // Medications
+                Route::post('/patients/{patient}/encounters/{encounter}/medications', [\App\Http\Controllers\MedicationRequestController::class, 'store']);
+                Route::put('/patients/{patient}/encounters/{encounter}/medications/{id}', [\App\Http\Controllers\MedicationRequestController::class, 'update']);
+            });
         });
 
         // ==========================================
