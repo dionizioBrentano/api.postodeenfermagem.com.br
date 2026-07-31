@@ -8,7 +8,6 @@ use App\Models\Patient;
 use App\Models\PatientUser;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Support\Facades\DB;
 
 class CareAuthorizationService
 {
@@ -26,31 +25,24 @@ class CareAuthorizationService
         ?\DateTimeInterface $endsAt = null,
         ?string $reason = null
     ): CareAuthorization {
-        // Validation: same tenant
         if ($patient->tenant_id !== $grantor->tenant_id || $patient->tenant_id !== $grantee->tenant_id) {
             throw new \InvalidArgumentException('Cross-tenant authorization is not allowed.');
         }
 
-        // Grantor must have power (admin, active delegate authorization, system flow, or compat patient_user)
-        if (!self::grantorHasPower($grantor, $patient, $sourceConsent)) {
+        if (! self::grantorHasPower($grantor, $patient, $sourceConsent)) {
             throw new AuthorizationException('Grantor does not have permission to delegate access to this patient.');
         }
 
-        if ($parentAuth && !$parentAuth->isActive()) {
+        if ($parentAuth && ! $parentAuth->isActive()) {
             throw new \InvalidArgumentException('Parent authorization is not active.');
         }
 
-        // Check duplicates
         $existing = CareAuthorization::where('patient_id', $patient->id)
             ->where('grantee_user_id', $grantee->id)
             ->where('status', 'active')
             ->first();
 
         if ($existing) {
-            // Optional: could merge scopes or update ends_at. Here we'll just throw or return existing.
-            // Returning existing to be idempotent, but in real scenario we might want to update it.
-            // Let's just create a new one and maybe revoke the old one, or return existing if identical.
-            // For MVP, if it exists and is active, let's just return it or throw. Let's throw 422 equivalent.
             throw new \InvalidArgumentException('Grantee already has an active authorization for this patient.');
         }
 
@@ -75,7 +67,7 @@ class CareAuthorizationService
 
     public static function revoke(CareAuthorization $authorization, User $by, ?string $reason = null, bool $cascade = true): void
     {
-        if (!$authorization->isActive()) {
+        if (! $authorization->isActive()) {
             return;
         }
 
@@ -88,17 +80,17 @@ class CareAuthorizationService
                 ->get();
 
             foreach ($children as $child) {
-                self::revoke($child, $by, 'Cascade revoke from parent: ' . $reason, true);
+                self::revoke($child, $by, 'Cascade revoke from parent: '.$reason, true);
             }
         }
     }
 
-    public static function grantFromConsent(Consent $consent, User $grantee, array $scopes = ['clinical:read', 'clinical:write', 'delegate'], ?User $grantor = null): CareAuthorization
-    {
-        // The grantor can be the patient (if they have a User account) or a "system" user.
-        // For now, if no grantor provided, we assume the grantee themselves is the initiator of the system flow
-        // or we need a system user. The rules say "grantor pode ser o profissional agendado ou user técnico".
-        // Let's use the grantee as the grantor for system flow if none provided.
+    public static function grantFromConsent(
+        Consent $consent,
+        User $grantee,
+        array $scopes = ['clinical:read', 'clinical:write', 'delegate'],
+        ?User $grantor = null
+    ): CareAuthorization {
         $grantor = $grantor ?? $grantee;
 
         return self::grant(
@@ -117,79 +109,103 @@ class CareAuthorizationService
             return false;
         }
 
-        // tenant:admin check (if applicable, assuming a role or method isAdmin)
-        // For now we'll assume there is no explicit isAdmin method on User, or we check if they have admin ability
-        // If there's an ability system, we could check here. Let's assume there's a token ability or role.
-        if ($user->tokenCan('tenant:admin') || $user->hasRole('admin')) {
-            // This is hypothetical. We'll leave it as a comment or basic check.
-        }
-
-        // Check care_authorization
-        $hasAuth = CareAuthorization::where('patient_id', $patient->id)
-            ->where('grantee_user_id', $user->id)
-            ->where('status', 'active')
-            ->get()
-            ->contains(function ($auth) use ($needScope) {
-                return in_array($needScope, $auth->scope ?? []);
-            });
-
-        if ($hasAuth) {
+        // Admin do tenant (ability no token OU user_type) — sem hasRole (método inexistente)
+        if (self::isTenantAdmin($user)) {
             return true;
         }
 
-        // MVP compat check
+        $authorizations = CareAuthorization::where('patient_id', $patient->id)
+            ->where('grantee_user_id', $user->id)
+            ->where('status', 'active')
+            ->get();
+
+        foreach ($authorizations as $auth) {
+            if (! $auth->isActive()) {
+                continue;
+            }
+
+            $scopes = is_array($auth->scope) ? $auth->scope : [];
+
+            // clinical:write implica clinical:read
+            if (in_array($needScope, $scopes, true)) {
+                return true;
+            }
+            if ($needScope === 'clinical:read' && in_array('clinical:write', $scopes, true)) {
+                return true;
+            }
+        }
+
+        // Compat MVP: vínculo patient_user ativo = read+write
         $activeLink = PatientUser::where('user_id', $user->id)
             ->where('patient_id', $patient->id)
             ->where('ativo', true)
             ->exists();
 
-        if ($activeLink) {
-            return true; // PatientUser gives read+write in MVP
-        }
-
-        return false;
+        return $activeLink;
     }
 
     public static function userCanAccessRecord(User $user, $record, string $needScope = 'clinical:read'): bool
     {
-        // Autor sempre tem acesso ao próprio registro
         if (isset($record->user_id) && $record->user_id === $user->id) {
             return true;
         }
 
-        // Senão, checa o paciente
-        return self::userCanAccessPatient($user, $record->patient, $needScope);
+        $patient = $record->patient ?? null;
+        if (! $patient instanceof Patient) {
+            return false;
+        }
+
+        return self::userCanAccessPatient($user, $patient, $needScope);
+    }
+
+    private static function isTenantAdmin(User $user): bool
+    {
+        try {
+            if (method_exists($user, 'tokenCan') && $user->tokenCan('tenant:admin')) {
+                return true;
+            }
+        } catch (\Throwable $e) {
+            // token ausente em alguns contextos
+        }
+
+        return isset($user->user_type) && $user->user_type === 'admin' && $user->tenant_id !== null;
     }
 
     private static function grantorHasPower(User $grantor, Patient $patient, ?Consent $sourceConsent = null): bool
     {
-        if ($sourceConsent && $sourceConsent->isValid()) {
-            return true; // System flow via accepted Consent
+        if ($sourceConsent && method_exists($sourceConsent, 'isValid') && $sourceConsent->isValid()) {
+            return true;
         }
 
-        // tenant admin check could be added here
-        
+        // Fluxo system/consent acabou de ser aceito (status valid)
+        if ($sourceConsent && $sourceConsent->status === 'valid') {
+            return true;
+        }
+
+        if (self::isTenantAdmin($grantor)) {
+            return true;
+        }
+
         $hasDelegate = CareAuthorization::where('patient_id', $patient->id)
             ->where('grantee_user_id', $grantor->id)
             ->where('status', 'active')
             ->get()
             ->contains(function ($auth) {
-                return in_array('delegate', $auth->scope ?? []);
+                if (! $auth->isActive()) {
+                    return false;
+                }
+                $scopes = is_array($auth->scope) ? $auth->scope : [];
+
+                return in_array('delegate', $scopes, true);
             });
 
         if ($hasDelegate) {
             return true;
         }
 
-        $activeLink = PatientUser::where('user_id', $grantor->id)
+        return PatientUser::where('user_id', $grantor->id)
             ->where('patient_id', $patient->id)
             ->where('ativo', true)
             ->exists();
-
-        if ($activeLink) {
-            return true;
-        }
-
-        return false;
     }
 }
