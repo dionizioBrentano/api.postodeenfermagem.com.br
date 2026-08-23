@@ -19,6 +19,13 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- Chaves fixas SOMENTE para a suíte de testes (banco sqlite em
+             memória, descartado ao final). Nunca reutilizar em qualquer
+             ambiente real: produção define APP_KEY/APP_KEK/BLIND_INDEX_KEY
+             pelo .env, fora do versionamento. -->
+        <env name="APP_KEY" value="base64:ueo6htZOcmQonmciAkYfDH9vg8gFl728AQbtp4tuIeE="/>
+        <env name="APP_KEK" value="MSxFH7h268eTep8gNeZBZj14WeOZf1W7XOCFNAz7WP8="/>
+        <env name="BLIND_INDEX_KEY" value="1b17a17aadb9212c2b36326b692dac7f08279485b4c92eace1d58d4ac14bfe0e"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

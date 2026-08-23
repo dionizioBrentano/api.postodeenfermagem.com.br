@@ -102,6 +102,11 @@ class DatabaseSeeder extends Seeder
         // ==========================================
         $this->call(ClinicalDemoSeeder::class);
 
+        // ==========================================
+        // 5. CONTEÚDO EDITORIAL (Procedimentos de Enfermagem)
+        // ==========================================
+        $this->call(ProcedureSeeder::class);
+
         $tenantVida = Tenant::where('slug', 'hospital-vida')->first();
         if ($tenantVida) {
             $this->command->info("");

@@ -22,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(\App\Models\Patient::class, \App\Policies\PatientPolicy::class);
+        Gate::policy(\App\Models\Procedure::class, \App\Policies\ProcedurePolicy::class);
+
         Gate::define('manage-tenant', function (User $user) {
             return $user->user_type === 'admin';
         });

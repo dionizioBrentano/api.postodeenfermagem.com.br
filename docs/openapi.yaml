@@ -31,6 +31,199 @@ components:
             type: array
             items:
               type: string
+    ProcedureCategory:
+      type: string
+      description: Categoria editorial do procedimento de enfermagem
+      enum:
+        - aplicacao_medicamentos
+        - curativos_feridas
+        - eliminacoes
+        - vias_aereas
+        - sondas_alimentares
+        - outros
+    ProcedureStatus:
+      type: string
+      description: Estado editorial. Apenas "published" aparece nas rotas públicas.
+      enum:
+        - draft
+        - published
+        - archived
+    Procedure:
+      type: object
+      description: Procedimento de Enfermagem na visão administrativa (rotas autenticadas)
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: "Sondagem Vesical de Alívio"
+        slug:
+          type: string
+          description: Único por tenant. Gerado a partir do título quando omitido.
+          example: "sondagem-vesical-de-alivio"
+        category:
+          $ref: '#/components/schemas/ProcedureCategory'
+        category_label:
+          type: string
+          example: "Eliminações (Sondas e Enemas)"
+        short_description:
+          type: string
+          nullable: true
+          description: Resumo em texto puro, usado nas listagens
+        content:
+          type: string
+          description: Conteúdo rico (HTML sanitizado no servidor ou Markdown)
+        featured_image:
+          type: string
+          nullable: true
+        gallery:
+          type: array
+          items:
+            type: string
+        order:
+          type: integer
+          example: 3
+        status:
+          $ref: '#/components/schemas/ProcedureStatus'
+        is_published:
+          type: boolean
+          description: true quando status = published e published_at já ocorreu
+        meta_title:
+          type: string
+          nullable: true
+        meta_description:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        updated_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+    PublicProcedure:
+      type: object
+      description: >-
+        Procedimento na visão pública. Não expõe status, autoria, tenant_id nem
+        datas de manutenção do registro. Nas listagens, "content" e "gallery"
+        são omitidos.
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        category:
+          $ref: '#/components/schemas/ProcedureCategory'
+        category_label:
+          type: string
+        short_description:
+          type: string
+        content:
+          type: string
+          description: Presente apenas no detalhe, não na listagem
+        featured_image:
+          type: string
+        gallery:
+          type: array
+          items:
+            type: string
+        order:
+          type: integer
+        meta_title:
+          type: string
+        meta_description:
+          type: string
+        published_at:
+          type: string
+          format: date-time
+    ProcedureWriteRequest:
+      type: object
+      required:
+        - title
+        - category
+        - content
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        slug:
+          type: string
+          maxLength: 200
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          description: Opcional. Gerado a partir do título quando omitido; único por tenant.
+        category:
+          $ref: '#/components/schemas/ProcedureCategory'
+        short_description:
+          type: string
+          maxLength: 1000
+          nullable: true
+        content:
+          type: string
+          maxLength: 200000
+        featured_image:
+          type: string
+          maxLength: 2048
+          nullable: true
+        gallery:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            maxLength: 2048
+        order:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        status:
+          $ref: '#/components/schemas/ProcedureStatus'
+        meta_title:
+          type: string
+          maxLength: 255
+          nullable: true
+        meta_description:
+          type: string
+          maxLength: 500
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+    PaginationMeta:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        from:
+          type: integer
+          nullable: true
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        to:
+          type: integer
+          nullable: true
+        total:
+          type: integer
 security:
   - BearerAuth: []
   - TenantHeader: []
@@ -187,3 +380,381 @@ paths:
       responses:
         '201':
           description: Observação criada
+
+  # ==========================================
+  # PROCEDIMENTOS DE ENFERMAGEM — ÁREA AUTENTICADA
+  # Leitura: qualquer usuário autenticado do tenant.
+  # Escrita: admins (ability tenant:admin + ProcedurePolicy).
+  # ==========================================
+  /procedures:
+    get:
+      tags: [Procedimentos]
+      summary: Listar Procedimentos de Enfermagem
+      description: >-
+        Lista os procedimentos do tenant identificado pelo header X-Tenant-ID,
+        em qualquer status. Ordenados por "order" e depois por título.
+      parameters:
+        - in: query
+          name: category
+          schema:
+            $ref: '#/components/schemas/ProcedureCategory'
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/ProcedureStatus'
+        - in: query
+          name: search
+          description: Busca em título, resumo e slug
+          schema:
+            type: string
+            maxLength: 255
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+        - in: query
+          name: with_trashed
+          description: Inclui removidos (soft delete). Ignorado para não administradores.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista paginada de procedimentos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Procedure'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          description: Não autenticado
+        '422':
+          description: Filtro inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Procedimentos]
+      summary: Criar Procedimento (Admin)
+      description: Exige ability `tenant:admin` e papel de administrador do tenant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcedureWriteRequest'
+      responses:
+        '201':
+          description: Procedimento criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '403':
+          description: Usuário sem papel de administrador
+        '422':
+          description: Erro de validação (inclui slug duplicado no tenant)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /procedures/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Procedimentos]
+      summary: Detalhar Procedimento
+      description: Acessível a qualquer usuário autenticado do tenant. Gera registro de auditoria "accessed".
+      responses:
+        '200':
+          description: Procedimento
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '404':
+          description: Não encontrado no tenant atual
+    put:
+      tags: [Procedimentos]
+      summary: Atualizar Procedimento (Admin)
+      description: >-
+        Atualização parcial ou total. O slug não é recalculado quando apenas o
+        título muda — é uma URL pública e só é alterado se enviado explicitamente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcedureWriteRequest'
+      responses:
+        '200':
+          description: Procedimento atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '403':
+          description: Usuário sem papel de administrador
+        '404':
+          description: Não encontrado no tenant atual
+        '422':
+          description: Erro de validação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [Procedimentos]
+      summary: Atualizar Procedimento parcialmente (Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcedureWriteRequest'
+      responses:
+        '200':
+          description: Procedimento atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '403':
+          description: Usuário sem papel de administrador
+        '404':
+          description: Não encontrado no tenant atual
+    delete:
+      tags: [Procedimentos]
+      summary: Remover Procedimento (Admin, soft delete)
+      description: Marca deleted_at. O registro deixa de aparecer nas listagens, mas permanece no banco e pode ser restaurado.
+      responses:
+        '200':
+          description: Procedimento removido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Procedimento removido com sucesso."
+        '403':
+          description: Usuário sem papel de administrador
+        '404':
+          description: Não encontrado no tenant atual
+  /procedures/{id}/publish:
+    post:
+      tags: [Procedimentos]
+      summary: Publicar Procedimento (Admin)
+      description: Define status = published e carimba published_at quando ainda não houver data.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Procedimento publicado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '403':
+          description: Usuário sem papel de administrador
+        '404':
+          description: Não encontrado no tenant atual
+  /procedures/{id}/unpublish:
+    post:
+      tags: [Procedimentos]
+      summary: Despublicar Procedimento (Admin)
+      description: Volta o procedimento para draft e limpa published_at, retirando-o da vitrine pública.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Procedimento despublicado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '403':
+          description: Usuário sem papel de administrador
+        '404':
+          description: Não encontrado no tenant atual
+  /procedures/{id}/restore:
+    post:
+      tags: [Procedimentos]
+      summary: Restaurar Procedimento removido (Admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Procedimento restaurado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Procedure'
+        '403':
+          description: Usuário sem papel de administrador
+        '404':
+          description: Não encontrado no tenant atual
+
+  # ==========================================
+  # PROCEDIMENTOS DE ENFERMAGEM — VITRINE PÚBLICA
+  # Sem autenticação, mas o header X-Tenant-ID continua obrigatório:
+  # é ele que mantém o isolamento multi-tenant ativo.
+  # ==========================================
+  /public/procedures:
+    get:
+      tags: [Procedimentos Públicos]
+      summary: Listar Procedimentos publicados
+      description: >-
+        Retorna apenas procedimentos com status "published" e published_at já
+        ocorrido, do tenant informado no header X-Tenant-ID. O corpo do
+        conteúdo (content/gallery) é omitido nesta listagem.
+      security:
+        - TenantHeader: []
+      parameters:
+        - in: query
+          name: category
+          schema:
+            $ref: '#/components/schemas/ProcedureCategory'
+        - in: query
+          name: search
+          schema:
+            type: string
+            maxLength: 255
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 15
+      responses:
+        '200':
+          description: Lista paginada de procedimentos publicados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicProcedure'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Header X-Tenant-ID ausente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Tenant não encontrado, inativo ou suspenso
+  /public/procedures/categories:
+    get:
+      tags: [Procedimentos Públicos]
+      summary: Listar categorias com contagem de publicados
+      description: Usado para montar o menu da vitrine. Sempre devolve as seis categorias, com total zero quando não houver publicados.
+      security:
+        - TenantHeader: []
+      responses:
+        '200':
+          description: Categorias disponíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        value:
+                          $ref: '#/components/schemas/ProcedureCategory'
+                        label:
+                          type: string
+                          example: "Curativos e Tratamento de Feridas"
+                        total:
+                          type: integer
+                          example: 3
+        '400':
+          description: Header X-Tenant-ID ausente
+  /public/procedures/{slug}:
+    get:
+      tags: [Procedimentos Públicos]
+      summary: Detalhar Procedimento publicado pelo slug
+      description: Rascunhos, arquivados e agendados para o futuro retornam 404.
+      security:
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+          example: sondagem-vesical-de-alivio
+      responses:
+        '200':
+          description: Procedimento publicado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PublicProcedure'
+        '400':
+          description: Header X-Tenant-ID ausente
+        '404':
+          description: Slug inexistente ou procedimento não publicado neste tenant

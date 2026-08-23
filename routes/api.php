@@ -26,6 +26,18 @@ Route::prefix('v1')->group(function () {
     });
 
     // ==========================================
+    // CONTEÚDO PÚBLICO — PROCEDIMENTOS DE ENFERMAGEM
+    // Sem autenticação, mas ainda com o middleware "tenant": o header
+    // X-Tenant-ID mantém o global scope da HasTenant ativo, e o controller
+    // só devolve registros com status "published".
+    // ==========================================
+    Route::middleware('tenant')->prefix('public')->group(function () {
+        Route::get('/procedures', [\App\Http\Controllers\PublicProcedureController::class, 'index']);
+        Route::get('/procedures/categories', [\App\Http\Controllers\PublicProcedureController::class, 'categories']);
+        Route::get('/procedures/{slug}', [\App\Http\Controllers\PublicProcedureController::class, 'show']);
+    });
+
+    // ==========================================
     // AUTHENTICATION ROUTES
     // ==========================================
 
@@ -132,6 +144,25 @@ Route::prefix('v1')->group(function () {
                 // Medications
                 Route::post('/patients/{patient}/encounters/{encounter}/medications', [\App\Http\Controllers\MedicationRequestController::class, 'store']);
                 Route::put('/patients/{patient}/encounters/{encounter}/medications/{id}', [\App\Http\Controllers\MedicationRequestController::class, 'update']);
+            });
+        });
+
+        // ==========================================
+        // PROCEDIMENTOS DE ENFERMAGEM (conteúdo editorial do tenant)
+        // Leitura: qualquer usuário autenticado do tenant.
+        // Escrita: admins (ability tenant:admin + ProcedurePolicy).
+        // ==========================================
+        Route::middleware('tenant')->group(function () {
+            Route::get('/procedures', [\App\Http\Controllers\ProcedureController::class, 'index']);
+            Route::get('/procedures/{id}', [\App\Http\Controllers\ProcedureController::class, 'show']);
+
+            Route::middleware('ability:tenant:admin')->group(function () {
+                Route::post('/procedures', [\App\Http\Controllers\ProcedureController::class, 'store']);
+                Route::match(['put', 'patch'], '/procedures/{id}', [\App\Http\Controllers\ProcedureController::class, 'update']);
+                Route::delete('/procedures/{id}', [\App\Http\Controllers\ProcedureController::class, 'destroy']);
+                Route::post('/procedures/{id}/publish', [\App\Http\Controllers\ProcedureController::class, 'publish']);
+                Route::post('/procedures/{id}/unpublish', [\App\Http\Controllers\ProcedureController::class, 'unpublish']);
+                Route::post('/procedures/{id}/restore', [\App\Http\Controllers\ProcedureController::class, 'restore']);
             });
         });
 
