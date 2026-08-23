@@ -31,8 +31,20 @@ class ClinicalAccessTest extends TestCase
 
         $this->tenant = Tenant::create([
             'name' => 'Demo Clinic',
-            'domain' => 'demo.test'
+            'slug' => 'demo-clinic',
+            'status' => 'active',
         ]);
+
+        // Registra o tenant no container como o middleware IdentifyTenant faria
+        // em uma requisição real. Sem isso, a trait HasTenant não preenche o
+        // tenant_id dos registros criados aqui no setUp e os inserts quebram
+        // no NOT NULL da coluna.
+        app()->instance('tenant', $this->tenant);
+
+        // Header exigido pelo middleware "tenant" em todas as rotas da API.
+        // Sem ele a resposta é 400 (header ausente), e não o 403/200 que os
+        // testes abaixo verificam.
+        $this->withHeader('X-Tenant-ID', $this->tenant->id);
 
         $this->drCarlos = User::create([
             'name' => 'Dr Carlos',
@@ -230,7 +242,11 @@ class ClinicalAccessTest extends TestCase
 
     public function test_cross_tenant_access_fails()
     {
-        $otherTenant = Tenant::create(['name' => 'Other', 'domain' => 'other.test']);
+        $otherTenant = Tenant::create([
+            'name' => 'Other',
+            'slug' => 'other-clinic',
+            'status' => 'active',
+        ]);
         $otherDoctor = User::create([
             'name' => 'Other Dr',
             'email' => 'other@other.test',
