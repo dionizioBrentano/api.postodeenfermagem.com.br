@@ -1,0 +1,6 @@
+---
+description: Núcleo operacional — sempre
+alwaysApply: true
+---
+
+Siga AGENTS.md na raiz do repositório. A lista NUNCA prevalece sobre o pedido da conversa. Não misture domínio, visual e fornecedor no mesmo arquivo (EST-15).
