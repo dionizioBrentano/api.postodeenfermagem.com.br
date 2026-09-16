@@ -31,6 +31,24 @@ components:
             type: array
             items:
               type: string
+    UserIdentity:
+      type: object
+      description: Identidade de autenticação vinculada ao usuário
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum: [local, google, microsoft]
+        provider_user_id:
+          type: string
+        email_at_provider:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
     ProcedureCategory:
       type: string
       description: Categoria editorial do procedimento de enfermagem
@@ -307,6 +325,153 @@ paths:
       responses:
         '200':
           description: Logout efetuado
+  /auth/oauth/{provider}/url:
+    post:
+      summary: Obter URL de autorização OAuth/OIDC
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [google, microsoft]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                intent:
+                  type: string
+                  enum: [login, link]
+                  default: login
+                return_to:
+                  type: string
+      responses:
+        '200':
+          description: URL gerada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  state:
+                    type: string
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/schemas/ErrorResponse'
+  /auth/oauth/{provider}/callback:
+    get:
+      summary: Callback de retorno do provedor OAuth/OIDC
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [google, microsoft]
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirecionamento para return_to com one_time_code
+        '200':
+          description: JSON direto em ambiente local
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/schemas/ErrorResponse'
+  /auth/oauth/{provider}/exchange:
+    post:
+      summary: Troca de one_time_code por tokens de sessão
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [google, microsoft]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - one_time_code
+              properties:
+                one_time_code:
+                  type: string
+      responses:
+        '200':
+          description: Sucesso na autenticação/troca de código
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/schemas/ErrorResponse'
+  /user:
+    get:
+      summary: Obter dados do usuário autenticado e suas identidades
+      responses:
+        '200':
+          description: Dados do usuário e identidades vinculadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  user_type:
+                    type: string
+                  identities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserIdentity'
+  /auth/identities/{id}:
+    delete:
+      summary: Desvincular identidade do usuário
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Identidade removida com sucesso
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/schemas/ErrorResponse'
   /patients:
     get:
       summary: Listar Pacientes

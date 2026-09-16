@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ApplicationAuthController;
 use App\Http\Controllers\CareAuthorizationController;
+use App\Http\Controllers\OAuthController;
 
 Route::prefix('v1')->group(function () {
     
@@ -48,13 +49,17 @@ Route::prefix('v1')->group(function () {
     Route::middleware('tenant')->group(function () {
         Route::post('/auth/register', [AuthController::class, 'register']);
         Route::post('/auth/login', [AuthController::class, 'login']);
+
+        // OAuth / OIDC
+        Route::post('/auth/oauth/{provider}/url', [OAuthController::class, 'url']);
+        Route::get('/auth/oauth/{provider}/callback', [OAuthController::class, 'callback']);
+        Route::post('/auth/oauth/{provider}/exchange', [OAuthController::class, 'exchange']);
     });
 
-    // Requer Autenticação Básica (MFA Steps, Logout)
+    // Requer Autenticação Básica (MFA Steps, Logout, Perfil, Identidades)
     Route::middleware(['tenant', 'auth:sanctum'])->group(function () {
-        Route::get('/user', function (\Illuminate\Http\Request $request) {
-            return $request->user();
-        });
+        Route::get('/user', [AuthController::class, 'user']);
+        Route::delete('/auth/identities/{id}', [AuthController::class, 'destroyIdentity']);
 
         Route::post('/auth/mfa/setup', [AuthController::class, 'setupMfa']);
         Route::post('/auth/mfa/verify', [AuthController::class, 'verifyMfa']);

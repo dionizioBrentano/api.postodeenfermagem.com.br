@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use PragmaRX\Google2FA\Google2FA;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -17,7 +18,7 @@ class AuthController extends Controller
     /**
      * Map User Roles to Sanctum Abilities (Scopes)
      */
-    private function getAbilitiesForUserType(string $userType): array
+    public static function getAbilitiesForUserType(string $userType): array
     {
         return match ($userType) {
             'admin' => ['tenant:admin', 'audit:read', 'patient:read', 'patient:write'],
@@ -47,13 +48,23 @@ class AuthController extends Controller
             'user_type' => 'required|in:professional,admin'
         ]);
 
-        $user = User::create([
-            'tenant_id' => $tenant->id,
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'user_type' => $request->user_type,
-        ]);
+        $user = DB::transaction(function () use ($tenant, $request) {
+            $user = User::create([
+                'tenant_id' => $tenant->id,
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'user_type' => $request->user_type,
+            ]);
+
+            $user->identities()->create([
+                'provider' => 'local',
+                'provider_user_id' => (string) $user->id,
+                'email_at_provider' => $user->email,
+            ]);
+
+            return $user;
+        });
 
         AuditService::logAs($user, 'registered', $user);
 
@@ -76,8 +87,17 @@ class AuthController extends Controller
             ->where('tenant_id', $tenant->id)
             ->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!$user || empty($user->password) || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Credenciais inválidas.'], 401);
+        }
+
+        // Se não houver identity local, crie (idempotente)
+        if (!$user->identities()->where('provider', 'local')->exists()) {
+            $user->identities()->create([
+                'provider' => 'local',
+                'provider_user_id' => (string) $user->id,
+                'email_at_provider' => $user->email,
+            ]);
         }
 
         // Se MFA estiver habilitado, emitimos token de permissão restrita
@@ -174,6 +194,53 @@ class AuthController extends Controller
             'user' => $user,
             'abilities' => $abilities,
         ]);
+    }
+
+    public function user(Request $request)
+    {
+        $user = $request->user()->load(['identities' => function ($query) {
+            $query->select(['id', 'user_id', 'provider', 'provider_user_id', 'email_at_provider', 'created_at']);
+        }]);
+
+        $user->makeHidden(['password', 'mfa_secret', 'remember_token', 'council_number_token']);
+
+        return response()->json($user);
+    }
+
+    public function destroyIdentity(Request $request, string $id)
+    {
+        $user = $request->user();
+
+        $identity = $user->identities()->where('id', $id)->first();
+
+        if (!$identity) {
+            return response()->json(['message' => 'Identidade não encontrada.'], 404);
+        }
+
+        $totalIdentities = $user->identities()->count();
+        if ($totalIdentities <= 1) {
+            return response()->json([
+                'message' => 'Proibido remover a única identidade do usuário.',
+                'code' => 'last_identity_cannot_be_removed',
+            ], 400);
+        }
+
+        $remainingIdentities = $user->identities()->where('id', '!=', $id)->get();
+        $onlyLocalRemains = $remainingIdentities->every(fn ($item) => $item->provider === 'local');
+
+        if ($onlyLocalRemains && empty($user->password)) {
+            return response()->json([
+                'message' => 'Não é possível remover este provedor: a conta não possui senha definida para autenticação local.',
+                'code' => 'identity_password_required',
+            ], 409);
+        }
+
+        $provider = $identity->provider;
+        $identity->delete();
+
+        AuditService::logAs($user, 'identity_deleted', $user, ['provider' => $provider]);
+
+        return response()->json(['message' => 'Identidade removida com sucesso.']);
     }
 
     public function logout(Request $request)

@@ -92,4 +92,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(MedicationRequest::class);
     }
+
+    public function identities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserIdentity::class);
+    }
 }
