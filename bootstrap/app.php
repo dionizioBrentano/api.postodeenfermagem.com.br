@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
             'lgpd.consent' => \App\Http\Middleware\CheckPatientConsent::class,
+            'mfa.stepup' => \App\Http\Middleware\RequireStepUpMfa::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

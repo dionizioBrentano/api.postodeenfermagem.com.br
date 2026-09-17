@@ -59,6 +59,10 @@ Route::prefix('v1')->group(function () {
     // Requer Autenticação Básica (MFA Steps, Logout, Perfil, Identidades)
     Route::middleware(['tenant', 'auth:sanctum'])->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
+        Route::post('/auth/profile', [AuthController::class, 'user']);
+        Route::match(['put', 'patch'], '/auth/profile', [AuthController::class, 'updateProfile'])->middleware('mfa.stepup');
+        Route::match(['put', 'patch'], '/user', [AuthController::class, 'updateProfile'])->middleware('mfa.stepup');
+
         Route::delete('/auth/identities/{id}', [AuthController::class, 'destroyIdentity']);
 
         Route::post('/auth/mfa/setup', [AuthController::class, 'setupMfa']);
@@ -71,7 +75,7 @@ Route::prefix('v1')->group(function () {
         // realmente filtre por tenant (sem ele, app('tenant') nunca fica
         // definido nessas rotas e o isolamento multi-tenant não é aplicado).
         // ==========================================
-        Route::middleware(['tenant', 'ability:patient:read'])->group(function () {
+        Route::middleware(['tenant', 'mfa.stepup', 'ability:patient:read'])->group(function () {
             Route::get('/patients', [\App\Http\Controllers\PatientController::class, 'index']);
             
             // Rotas clínicas (autorização agora via Policy + CareAuthorizationService)
@@ -111,7 +115,7 @@ Route::prefix('v1')->group(function () {
             });
         });
 
-        Route::middleware(['tenant', 'ability:patient:write'])->group(function () {
+        Route::middleware(['tenant', 'mfa.stepup', 'ability:patient:write'])->group(function () {
             Route::post('/patients', [\App\Http\Controllers\PatientController::class, 'store']);
             Route::put('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'update']);
             Route::delete('/patients/{id}', [\App\Http\Controllers\PatientController::class, 'destroy']);
@@ -161,7 +165,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/procedures', [\App\Http\Controllers\ProcedureController::class, 'index']);
             Route::get('/procedures/{id}', [\App\Http\Controllers\ProcedureController::class, 'show']);
 
-            Route::middleware('ability:tenant:admin')->group(function () {
+            Route::middleware(['mfa.stepup', 'ability:tenant:admin'])->group(function () {
                 Route::post('/procedures', [\App\Http\Controllers\ProcedureController::class, 'store']);
                 Route::match(['put', 'patch'], '/procedures/{id}', [\App\Http\Controllers\ProcedureController::class, 'update']);
                 Route::delete('/procedures/{id}', [\App\Http\Controllers\ProcedureController::class, 'destroy']);

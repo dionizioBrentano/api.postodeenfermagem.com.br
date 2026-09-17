@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Casts\EncryptedWithDek;
+use App\Models\Tenant;
 use App\Services\TokenizationService;
 use App\Traits\HasEncryptedFields;
 use App\Traits\HasTenant;
@@ -32,6 +33,8 @@ class User extends Authenticatable
         'council_number',
         'mfa_secret',
         'mfa_enabled',
+        'phone',
+        'cpf',
     ];
 
     /**
@@ -44,6 +47,8 @@ class User extends Authenticatable
         'remember_token',
         'mfa_secret',
         'council_number_token',
+        'cpf_token',
+        'phone_token',
     ];
 
     /**
@@ -60,6 +65,8 @@ class User extends Authenticatable
             'mfa_secret' => EncryptedWithDek::class,
             // Numero do conselho (CRM/COREN/etc.) nunca fica em texto puro.
             'council_number' => EncryptedWithDek::class.':council_number_token',
+            'cpf' => EncryptedWithDek::class.':cpf_token',
+            'phone' => EncryptedWithDek::class.':phone_token',
         ];
     }
 
@@ -71,6 +78,108 @@ class User extends Authenticatable
         $token = app(TokenizationService::class)->tokenize($councilNumber);
 
         return static::where('council_number_token', $token)->first();
+    }
+
+    /**
+     * Localiza um usuário pelo CPF, via blind index no tenant atual.
+     */
+    public static function findByCpf(string $cpf): ?self
+    {
+        $tokenService = app(TokenizationService::class);
+        $tenantId = app()->has('tenant') ? (app('tenant') instanceof Tenant ? app('tenant')->id : app('tenant')) : null;
+
+        $token = $tokenService->tokenize($cpf);
+        $query = static::where('cpf_token', $token);
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+        $user = $query->first();
+        if ($user) {
+            return $user;
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', $cpf);
+        if ($digits !== '' && $digits !== $cpf) {
+            $token = $tokenService->tokenize($digits);
+            $query = static::where('cpf_token', $token);
+            if ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            }
+            return $query->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * Localiza um usuário pelo telefone, via blind index no tenant atual.
+     */
+    public static function findByPhone(string $phone): ?self
+    {
+        $tokenService = app(TokenizationService::class);
+        $tenantId = app()->has('tenant') ? (app('tenant') instanceof Tenant ? app('tenant')->id : app('tenant')) : null;
+
+        // 1. Tenta direto como passado
+        $token = $tokenService->tokenize($phone);
+        $query = static::where('phone_token', $token);
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+        $user = $query->first();
+        if ($user) {
+            return $user;
+        }
+
+        // 2. Tenta apenas dígitos
+        $digits = preg_replace('/[^0-9]/', '', $phone);
+        if ($digits !== '' && $digits !== $phone) {
+            $token = $tokenService->tokenize($digits);
+            $query = static::where('phone_token', $token);
+            if ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            }
+            $user = $query->first();
+            if ($user) {
+                return $user;
+            }
+        }
+
+        // 3. Se dígitos começam com DDI 55 e tem 12 ou 13 dígitos, tenta sem 55
+        if (str_starts_with($digits, '55') && (strlen($digits) === 12 || strlen($digits) === 13)) {
+            $withoutCountry = substr($digits, 2);
+            $token = $tokenService->tokenize($withoutCountry);
+            $query = static::where('phone_token', $token);
+            if ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            }
+            $user = $query->first();
+            if ($user) {
+                return $user;
+            }
+        }
+
+        // 4. Se tem 10 ou 11 dígitos, tenta com DDI 55
+        if (strlen($digits) === 10 || strlen($digits) === 11) {
+            $withCountry = '55' . $digits;
+            $token = $tokenService->tokenize($withCountry);
+            $query = static::where('phone_token', $token);
+            if ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            }
+            $user = $query->first();
+            if ($user) {
+                return $user;
+            }
+
+            $token = $tokenService->tokenize('+' . $withCountry);
+            $query = static::where('phone_token', $token);
+            if ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            }
+            return $query->first();
+        }
+
+        return null;
     }
 
     public function encounters(): \Illuminate\Database\Eloquent\Relations\HasMany

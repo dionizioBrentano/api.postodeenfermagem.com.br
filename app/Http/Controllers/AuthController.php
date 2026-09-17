@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\Cpf;
 use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use PragmaRX\Google2FA\Google2FA;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -40,22 +42,57 @@ class AuthController extends Controller
             'email' => [
                 'required',
                 'email',
-                \Illuminate\Validation\Rule::unique('users')->where(function ($query) use ($tenant) {
+                Rule::unique('users')->where(function ($query) use ($tenant) {
                     return $query->where('tenant_id', $tenant->id);
                 })
             ],
             'password' => 'required|confirmed|min:8',
-            'user_type' => 'required|in:professional,admin'
+            'user_type' => 'required|in:professional,admin',
+            'cpf' => ['nullable', 'string', 'digits:11', new Cpf],
+            'phone' => ['nullable', 'string', 'regex:/^\d{10,11}$/'],
         ]);
 
+        if ($request->filled('cpf')) {
+            $cpfDigits = preg_replace('/[^0-9]/', '', $request->cpf);
+            if (User::findByCpf($cpfDigits)) {
+                return response()->json([
+                    'message' => 'O CPF informado já está em uso.',
+                    'errors' => [
+                        'cpf' => ['O CPF informado já está em uso neste tenant.']
+                    ]
+                ], 422);
+            }
+        }
+
+        if ($request->filled('phone')) {
+            if (User::findByPhone($request->phone)) {
+                return response()->json([
+                    'message' => 'O telefone informado já está em uso.',
+                    'errors' => [
+                        'phone' => ['O telefone informado já está em uso neste tenant.']
+                    ]
+                ], 422);
+            }
+        }
+
         $user = DB::transaction(function () use ($tenant, $request) {
-            $user = User::create([
+            $userData = [
                 'tenant_id' => $tenant->id,
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
                 'user_type' => $request->user_type,
-            ]);
+            ];
+
+            if ($request->filled('cpf')) {
+                $userData['cpf'] = preg_replace('/[^0-9]/', '', $request->cpf);
+            }
+
+            if ($request->filled('phone')) {
+                $userData['phone'] = trim($request->phone);
+            }
+
+            $user = User::create($userData);
 
             $user->identities()->create([
                 'provider' => 'local',
@@ -78,27 +115,39 @@ class AuthController extends Controller
             return response()->json(['message' => 'Tenant obrigatório.'], 400);
         }
 
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+        $identifier = $request->input('identifier') ?? $request->input('email');
+        $password = $request->input('password');
 
-        $user = User::where('email', $request->email)
-            ->where('tenant_id', $tenant->id)
-            ->first();
-
-        if (!$user || empty($user->password) || !Hash::check($request->password, $user->password)) {
+        if (empty($identifier) || empty($password)) {
             return response()->json(['message' => 'Credenciais inválidas.'], 401);
         }
 
-        // Se não houver identity local, crie (idempotente)
-        if (!$user->identities()->where('provider', 'local')->exists()) {
-            $user->identities()->create([
-                'provider' => 'local',
-                'provider_user_id' => (string) $user->id,
-                'email_at_provider' => $user->email,
-            ]);
+        $user = null;
+        if (str_contains($identifier, '@')) {
+            $user = User::where('email', $identifier)
+                ->where('tenant_id', $tenant->id)
+                ->first();
+        } else {
+            $digits = preg_replace('/[^0-9]/', '', $identifier);
+            if (strlen($digits) === 11 && Cpf::isValid($digits)) {
+                $user = User::findByCpf($digits);
+                if (! $user) {
+                    $user = User::findByPhone($identifier);
+                }
+            } else {
+                $user = User::findByPhone($identifier);
+            }
         }
+
+        if (!$user || empty($user->password) || !Hash::check($password, $user->password)) {
+            return response()->json(['message' => 'Credenciais inválidas.'], 401);
+        }
+
+        // Identity local idempotente no sucesso
+        $user->identities()->firstOrCreate(
+            ['provider' => 'local', 'provider_user_id' => (string) $user->id],
+            ['email_at_provider' => $user->email]
+        );
 
         // Se MFA estiver habilitado, emitimos token de permissão restrita
         if ($user->mfa_enabled) {
@@ -113,8 +162,8 @@ class AuthController extends Controller
             ]);
         }
 
-        // Sem MFA, emite token pleno
-        $abilities = $this->getAbilitiesForUserType($user->user_type);
+        // Login SEM mfa_enabled: token abilities só ['profile:read']
+        $abilities = ['profile:read'];
         $token = $user->createToken('access-token', $abilities)->plainTextToken;
 
         AuditService::logAs($user, 'login', $user);
@@ -123,6 +172,116 @@ class AuthController extends Controller
             'access_token' => $token,
             'user' => $user,
             'abilities' => $abilities,
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $tenant = app('tenant');
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json(['message' => 'Não autenticado.'], 401);
+        }
+
+        if (! $user->mfa_enabled) {
+            return response()->json([
+                'message' => 'Autenticação de dois fatores obrigatória para alterar dados cadastrais.',
+                'code' => 'mfa_required',
+            ], 403);
+        }
+
+        if (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+            $abilities = (array) ($user->currentAccessToken()->abilities ?? []);
+            if ($abilities === ['profile:read'] || $abilities === ['mfa:verify'] || (count($abilities) === 1 && in_array('profile:read', $abilities, true))) {
+                return response()->json([
+                    'message' => 'Autenticação de dois fatores obrigatória para alterar dados cadastrais.',
+                    'code' => 'mfa_required',
+                ], 403);
+            }
+        }
+
+        if (method_exists($user, 'tokenCan') && ($user->tokenCan('mfa:verify') || ($user->tokenCan('profile:read') && ! $user->tokenCan('patient:read') && ! $user->tokenCan('patient:write') && ! $user->tokenCan('tenant:admin') && ! $user->tokenCan('clinical:read') && ! $user->tokenCan('*')))) {
+            return response()->json([
+                'message' => 'Autenticação de dois fatores obrigatória para alterar dados cadastrais.',
+                'code' => 'mfa_required',
+            ], 403);
+        }
+
+        $rules = [
+            'name' => 'sometimes|string|max:255',
+            'email' => [
+                'sometimes',
+                'email',
+                Rule::unique('users')->where(function ($query) use ($tenant) {
+                    return $tenant ? $query->where('tenant_id', $tenant->id) : $query;
+                })->ignore($user->id),
+            ],
+            'password' => 'sometimes|nullable|string|min:8',
+            'cpf' => ['sometimes', 'nullable', 'string', 'digits:11', new Cpf],
+            'phone' => ['sometimes', 'nullable', 'string', 'regex:/^\d{10,11}$/'],
+        ];
+
+        $request->validate($rules);
+
+        if ($request->has('cpf') && $request->filled('cpf')) {
+            $cpfDigits = preg_replace('/[^0-9]/', '', $request->cpf);
+            $existing = User::findByCpf($cpfDigits);
+            if ($existing && $existing->id !== $user->id) {
+                return response()->json([
+                    'message' => 'O CPF informado já está em uso.',
+                    'errors' => [
+                        'cpf' => ['O CPF informado já está em uso neste tenant.']
+                    ]
+                ], 422);
+            }
+        }
+
+        if ($request->has('phone') && $request->filled('phone')) {
+            $existing = User::findByPhone($request->phone);
+            if ($existing && $existing->id !== $user->id) {
+                return response()->json([
+                    'message' => 'O telefone informado já está em uso.',
+                    'errors' => [
+                        'phone' => ['O telefone informado já está em uso neste tenant.']
+                    ]
+                ], 422);
+            }
+        }
+
+        if ($request->has('name')) {
+            $user->name = $request->name;
+        }
+
+        if ($request->has('email')) {
+            $user->email = $request->email;
+        }
+
+        if ($request->has('password') && $request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        if ($request->has('cpf')) {
+            $user->cpf = $request->filled('cpf') ? preg_replace('/[^0-9]/', '', $request->cpf) : null;
+        }
+
+        if ($request->has('phone')) {
+            $user->phone = $request->filled('phone') ? trim($request->phone) : null;
+        }
+
+        $user->save();
+
+        AuditService::logAs($user, 'profile_updated', $user);
+
+        $user->refresh()->load(['identities' => function ($query) {
+            $query->select(['id', 'user_id', 'provider', 'provider_user_id', 'email_at_provider', 'created_at']);
+        }]);
+
+        $user->makeHidden(['password', 'mfa_secret', 'remember_token', 'council_number_token', 'cpf_token', 'phone_token']);
+
+        return response()->json([
+            'message' => 'Perfil atualizado com sucesso.',
+            'user' => $user,
         ]);
     }
 
@@ -202,7 +361,7 @@ class AuthController extends Controller
             $query->select(['id', 'user_id', 'provider', 'provider_user_id', 'email_at_provider', 'created_at']);
         }]);
 
-        $user->makeHidden(['password', 'mfa_secret', 'remember_token', 'council_number_token']);
+        $user->makeHidden(['password', 'mfa_secret', 'remember_token', 'council_number_token', 'cpf_token', 'phone_token']);
 
         return response()->json($user);
     }

@@ -75,3 +75,7 @@ A lista NUNCA no texto não basta. O repositório deve ter: scanner de segredos 
 ## Entrega
 
 DOC-07: arquivos, o que foi verificado e como, o que não foi, risco residual.
+
+## Terminal
+Autorizado de forma contínua neste repo: git add/commit/push/pull/checkout (sem --force e sem reset --hard); npm install; npm run build; npm run dev.
+Não solicitar confirmação a cada comando desses. Um lote, uma execução, um relato no final.

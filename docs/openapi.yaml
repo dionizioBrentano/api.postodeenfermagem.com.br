@@ -256,6 +256,7 @@ paths:
   /auth/login:
     post:
       summary: Autenticação de Usuário
+      description: Permite login por email, CPF (11 dígitos) ou telefone brasileiro. Retorna token com scope profile:read se MFA não estiver ativo, ou exige verificação se MFA estiver habilitado.
       security:
         - TenantHeader: []
       requestBody:
@@ -264,17 +265,34 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - password
               properties:
+                identifier:
+                  type: string
+                  description: Email, CPF (11 dígitos com ou sem máscara) ou telefone
+                  example: "11987654321"
                 email:
                   type: string
+                  description: Email (compatibilidade com versões anteriores)
+                  example: "usuario@hospital.com.br"
                 password:
                   type: string
+                  format: password
+                  example: "SenhaForte@123"
       responses:
         '200':
-          description: Sucesso (Retorna Token JWT)
+          description: Sucesso (Retorna Token e abilities)
+        '401':
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /auth/register:
     post:
       summary: Registro de Usuário
+      description: Registro com nome, email, senha, user_type e campos opcionais de CPF (11 dígitos válidos) e telefone (apenas dígitos BR).
       security:
         - TenantHeader: []
       requestBody:
@@ -283,21 +301,51 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - name
+                - email
+                - password
+                - password_confirmation
+                - user_type
               properties:
                 name:
                   type: string
+                  example: "Dra. Maria Silva"
                 email:
                   type: string
+                  format: email
+                  example: "maria.silva@hospital.com.br"
                 password:
                   type: string
+                  format: password
+                  example: "SenhaForte@123"
                 password_confirmation:
                   type: string
+                  format: password
+                  example: "SenhaForte@123"
                 user_type:
                   type: string
                   enum: [professional, admin]
+                  example: "professional"
+                cpf:
+                  type: string
+                  nullable: true
+                  description: CPF com 11 dígitos numéricos
+                  example: "12345678909"
+                phone:
+                  type: string
+                  nullable: true
+                  description: Telefone brasileiro com DDD (apenas 10 ou 11 dígitos)
+                  example: "11987654321"
       responses:
         '201':
-          description: Usuário criado
+          description: Usuário criado com sucesso
+        '422':
+          description: Erro de validação (ex. CPF já em uso ou inválido)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /auth/mfa/setup:
     post:
       summary: Configuração de MFA (TOTP)
@@ -449,10 +497,69 @@ paths:
                     type: string
                   user_type:
                     type: string
+                  phone:
+                    type: string
+                    nullable: true
+                  cpf:
+                    type: string
+                    nullable: true
+                  mfa_enabled:
+                    type: boolean
                   identities:
                     type: array
                     items:
                       $ref: '#/components/schemas/UserIdentity'
+  /auth/profile:
+    get:
+      summary: Obter dados do perfil do usuário autenticado
+      responses:
+        '200':
+          description: Dados do perfil
+    patch:
+      summary: Atualizar perfil do usuário (exige step-up MFA)
+      description: Atualiza nome, email, password, cpf e telefone. Exige que o MFA esteja ativado e já verificado (token pleno); tokens restritos ou usuários sem MFA recebem 403 mfa_required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  nullable: true
+                cpf:
+                  type: string
+                  nullable: true
+                phone:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Perfil atualizado com sucesso
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Autenticação de dois fatores obrigatória
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Autenticação de dois fatores obrigatória para alterar dados cadastrais."
+                  code:
+                    type: string
+                    example: "mfa_required"
+        '422':
+          $ref: '#/components/schemas/ErrorResponse'
   /auth/identities/{id}:
     delete:
       summary: Desvincular identidade do usuário
@@ -478,11 +585,37 @@ paths:
       responses:
         '200':
           description: Lista de pacientes
+        '403':
+          description: Acesso proibido ou MFA obrigatório
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Autenticação de dois fatores obrigatória para esta operação."
+                  code:
+                    type: string
+                    example: "mfa_required"
     post:
       summary: Criar Paciente
       responses:
         '201':
           description: Paciente criado
+        '403':
+          description: Acesso proibido ou MFA obrigatório
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Autenticação de dois fatores obrigatória para esta operação."
+                  code:
+                    type: string
+                    example: "mfa_required"
   /patients/{patient}/encounters:
     get:
       summary: Listar Atendimentos do Paciente
