@@ -509,6 +509,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/UserIdentity'
+        '403':
+          description: Acesso não autorizado para o tenant informado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Acesso não autorizado para este tenant."
+                  code:
+                    type: string
+                    example: "tenant_forbidden"
   /auth/profile:
     get:
       summary: Obter dados do perfil do usuário autenticado

@@ -57,7 +57,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // Requer Autenticação Básica (MFA Steps, Logout, Perfil, Identidades)
-    Route::middleware(['tenant', 'auth:sanctum'])->group(function () {
+    Route::middleware(['tenant', 'auth:sanctum', 'ensure_token_tenant'])->group(function () {
         Route::get('/user', [AuthController::class, 'user']);
         Route::post('/auth/profile', [AuthController::class, 'user']);
         Route::match(['put', 'patch'], '/auth/profile', [AuthController::class, 'updateProfile'])->middleware('mfa.stepup');

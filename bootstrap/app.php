@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'tenant' => \App\Http\Middleware\IdentifyTenant::class,
+            'ensure_token_tenant' => \App\Http\Middleware\EnsureTokenTenant::class,
+            'token.tenant' => \App\Http\Middleware\EnsureTokenTenant::class,
             'require_app_token' => \App\Http\Middleware\RequireApplicationToken::class,
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
