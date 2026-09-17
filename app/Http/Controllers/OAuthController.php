@@ -169,23 +169,33 @@ class OAuthController extends Controller
 
         // Intent: Link
         if ($intent === 'link') {
-            $existingIdentity = UserIdentity::where('provider', $provider)
-                ->where('provider_user_id', $sub)
-                ->first();
-
-            if ($existingIdentity) {
-                return response()->json([
-                    'message' => 'Esta identidade já está vinculada a outro usuário.',
-                    'code' => 'identity_already_linked',
-                ], 409);
-            }
-
             $user = User::where('id', $stateData['user_id'])
                 ->where('tenant_id', $tenant->id)
                 ->first();
 
             if (!$user) {
                 return response()->json(['message' => 'Usuário não encontrado.'], 404);
+            }
+
+            $existingIdentity = UserIdentity::where('provider', $provider)
+                ->where('provider_user_id', $sub)
+                ->first();
+
+            if ($existingIdentity) {
+                if ((string) $existingIdentity->user_id === (string) $stateData['user_id']) {
+                    $payload = [
+                        'message' => 'Identidade vinculada com sucesso.',
+                        'user' => $user,
+                        'linked_provider' => $provider,
+                    ];
+
+                    return $this->finishOAuth($request, $tenant->id, $returnTo, $payload);
+                }
+
+                return response()->json([
+                    'message' => 'Esta identidade já está vinculada a outro usuário.',
+                    'code' => 'identity_already_linked',
+                ], 409);
             }
 
             $user->identities()->create([
