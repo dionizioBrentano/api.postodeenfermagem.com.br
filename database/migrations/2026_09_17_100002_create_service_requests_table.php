@@ -21,7 +21,7 @@ return new class extends Migration
 
             $table->string('cep_servico', 20);
             $table->decimal('latitude', 10, 7)->nullable();
-            $table->decimal('longitude', 11, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
             $table->date('slot_date');
             $table->string('slot_window'); // manha|tarde|noite
             $table->string('status')->default('requested'); // requested|accepted|done|cancelled

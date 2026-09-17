@@ -18,10 +18,10 @@ return new class extends Migration
 
             $table->string('name');
             $table->string('cep', 20);
-            $table->decimal('latitude', 10, 7)->nullable();
-            $table->decimal('longitude', 11, 7)->nullable();
-            $table->unsignedDecimal('coverage_km', 8, 2)->default(10.00);
+            $table->decimal('coverage_km', 6, 2)->default(10);
             $table->decimal('quality_score', 4, 2)->nullable();
+            $table->decimal('latitude', 10, 7)->nullable();
+            $table->decimal('longitude', 10, 7)->nullable();
             $table->boolean('active')->default(true);
 
             $table->timestamps();
