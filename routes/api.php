@@ -36,6 +36,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/procedures', [\App\Http\Controllers\PublicProcedureController::class, 'index']);
         Route::get('/procedures/categories', [\App\Http\Controllers\PublicProcedureController::class, 'categories']);
         Route::get('/procedures/{slug}', [\App\Http\Controllers\PublicProcedureController::class, 'show']);
+        Route::get('/offerings/search', [\App\Http\Controllers\PublicOfferingController::class, 'search']);
     });
 
     // ==========================================
@@ -173,6 +174,17 @@ Route::prefix('v1')->group(function () {
                 Route::post('/procedures/{id}/unpublish', [\App\Http\Controllers\ProcedureController::class, 'unpublish']);
                 Route::post('/procedures/{id}/restore', [\App\Http\Controllers\ProcedureController::class, 'restore']);
             });
+        });
+
+        // ==========================================
+        // PEDIDOS DE SERVIÇO (SERVICE REQUESTS)
+        // Requer MFA step-up.
+        // ==========================================
+        Route::middleware('mfa.stepup')->group(function () {
+            Route::get('/service-requests', [\App\Http\Controllers\ServiceRequestController::class, 'index']);
+            Route::get('/service-requests/{id}', [\App\Http\Controllers\ServiceRequestController::class, 'show']);
+            Route::post('/service-requests', [\App\Http\Controllers\ServiceRequestController::class, 'store']);
+            Route::patch('/service-requests/{id}', [\App\Http\Controllers\ServiceRequestController::class, 'update']);
         });
 
         // ==========================================

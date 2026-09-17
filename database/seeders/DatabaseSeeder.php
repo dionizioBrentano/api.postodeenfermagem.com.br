@@ -107,6 +107,11 @@ class DatabaseSeeder extends Seeder
         // ==========================================
         $this->call(ProcedureSeeder::class);
 
+        // ==========================================
+        // 6. PONTOS DE ATENDIMENTO E OFERTAS (Vitrine / Pedidos)
+        // ==========================================
+        $this->call(ServicePointAndOfferingSeeder::class);
+
         $tenantVida = Tenant::where('slug', 'hospital-vida')->first();
         if ($tenantVida) {
             $this->command->info("");

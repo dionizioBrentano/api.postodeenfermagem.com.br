@@ -47,9 +47,11 @@ class AuthController extends Controller
                 })
             ],
             'password' => 'required|confirmed|min:8',
-            'user_type' => 'required|in:professional,admin',
+            'user_type' => 'required|in:patient,professional,admin',
             'cpf' => ['nullable', 'string', 'digits:11', new Cpf],
             'phone' => ['nullable', 'string', 'regex:/^\d{10,11}$/'],
+            'council_type' => ['nullable', 'string', 'max:20', 'prohibited_if:user_type,patient'],
+            'council_number' => ['nullable', 'string', 'max:50', 'prohibited_if:user_type,patient'],
         ]);
 
         if ($request->filled('cpf')) {
@@ -90,6 +92,15 @@ class AuthController extends Controller
 
             if ($request->filled('phone')) {
                 $userData['phone'] = trim($request->phone);
+            }
+
+            if ($request->user_type !== 'patient') {
+                if ($request->filled('council_type')) {
+                    $userData['council_type'] = trim($request->council_type);
+                }
+                if ($request->filled('council_number')) {
+                    $userData['council_number'] = trim($request->council_number);
+                }
             }
 
             $user = User::create($userData);

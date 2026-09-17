@@ -206,4 +206,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserIdentity::class);
     }
+
+    public function servicePoints(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ServicePoint::class);
+    }
+
+    public function serviceRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ServiceRequest::class, 'client_user_id');
+    }
 }

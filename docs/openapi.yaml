@@ -31,6 +31,181 @@ components:
             type: array
             items:
               type: string
+    PublicOffering:
+      type: object
+      description: Ponto de atendimento ofertando um procedimento específico (dados mínimos, sem vazar dados do profissional)
+      properties:
+        id:
+          type: string
+          format: uuid
+        offering_id:
+          type: string
+          format: uuid
+        service_point_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Ponto de Atendimento Centro - Paulista"
+        quality_score:
+          type: number
+          format: float
+          nullable: true
+          example: 4.80
+        cep:
+          type: string
+          example: "01310-100"
+        coverage_km:
+          type: number
+          format: float
+          example: 15.00
+        procedure_slug:
+          type: string
+          example: "curativo-simples"
+        procedure_title:
+          type: string
+          nullable: true
+          example: "Curativo Simples com Técnica Asséptica"
+        latitude:
+          type: number
+          format: float
+          nullable: true
+          example: -23.561684
+        longitude:
+          type: number
+          format: float
+          nullable: true
+          example: -46.655981
+    ServiceRequest:
+      type: object
+      description: Pedido de serviço
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        client_user_id:
+          type: string
+          format: uuid
+        offering_id:
+          type: string
+          format: uuid
+          nullable: true
+        service_point_id:
+          type: string
+          format: uuid
+          nullable: true
+        procedure_id:
+          type: string
+          format: uuid
+        procedure:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            slug:
+              type: string
+        service_point:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            cep:
+              type: string
+        cep_servico:
+          type: string
+          example: "01310-100"
+        latitude:
+          type: number
+          format: float
+          nullable: true
+        longitude:
+          type: number
+          format: float
+          nullable: true
+        slot_date:
+          type: string
+          format: date
+          example: "2026-10-01"
+        slot_window:
+          type: string
+          enum: [manha, tarde, noite]
+          example: "manha"
+        status:
+          type: string
+          enum: [requested, accepted, done, cancelled]
+          example: "requested"
+        notes_cliente:
+          type: string
+          nullable: true
+          example: "Campainha não funciona, chamar no portão."
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateServiceRequestInput:
+      type: object
+      required:
+        - procedure_slug
+        - cep_servico
+        - slot_date
+        - slot_window
+      properties:
+        procedure_slug:
+          type: string
+          example: "curativo-simples"
+        cep_servico:
+          type: string
+          example: "01310-100"
+        slot_date:
+          type: string
+          format: date
+          example: "2026-10-01"
+        slot_window:
+          type: string
+          enum: [manha, tarde, noite]
+          example: "manha"
+        offering_id:
+          type: string
+          format: uuid
+          nullable: true
+        service_point_id:
+          type: string
+          format: uuid
+          nullable: true
+        notes_cliente:
+          type: string
+          nullable: true
+          example: "Campainha não funciona, chamar no portão."
+        latitude:
+          type: number
+          format: float
+          nullable: true
+        longitude:
+          type: number
+          format: float
+          nullable: true
+    UpdateServiceRequestStatusInput:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [accepted, done, cancelled]
+          example: "accepted"
     UserIdentity:
       type: object
       description: Identidade de autenticação vinculada ao usuário
@@ -1069,3 +1244,189 @@ paths:
           description: Header X-Tenant-ID ausente
         '404':
           description: Slug inexistente ou procedimento não publicado neste tenant
+  /public/offerings/search:
+    get:
+      tags: [Ofertas e Vitrine]
+      summary: Buscar ofertas de procedimentos nos pontos de atendimento do tenant
+      description: |
+        Resolve pontos ativos do tenant do header que ofertam aquele rótulo.
+        Se vier cep, ordene por proximidade quando lat/lng existirem; senão por quality_score desc depois name.
+        Não vaza dados confidenciais do profissional (CPF, e-mail, telefone).
+      security:
+        - TenantHeader: []
+      parameters:
+        - in: query
+          name: procedure_slug
+          required: true
+          schema:
+            type: string
+          example: curativo-simples
+        - in: query
+          name: cep
+          required: false
+          schema:
+            type: string
+          example: "01310-100"
+        - in: query
+          name: latitude
+          required: false
+          schema:
+            type: number
+            format: float
+          example: -23.561684
+        - in: query
+          name: longitude
+          required: false
+          schema:
+            type: number
+            format: float
+          example: -46.655981
+      responses:
+        '200':
+          description: Lista de ofertas encontradas ordenadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicOffering'
+        '400':
+          description: Header X-Tenant-ID ausente
+  /service-requests:
+    get:
+      tags: [Pedidos de Serviço]
+      summary: Listar pedidos de serviço
+      description: |
+        Exige MFA step-up.
+        Cliente: lista apenas os seus próprios pedidos.
+        Profissional/Admin do tenant: lista todos os pedidos do tenant.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: query
+          name: client_user_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [requested, accepted, done, cancelled]
+      responses:
+        '200':
+          description: Lista paginada de pedidos de serviço
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceRequest'
+        '403':
+          description: MFA step-up obrigatório ou acesso não autorizado
+    post:
+      tags: [Pedidos de Serviço]
+      summary: Criar um pedido de serviço
+      description: |
+        Exige MFA step-up (middleware mfa.stepup). Sem MFA retorna 403 mfa_required.
+        O usuário autenticado (patient ou professional) é associado como client_user_id. Status inicial requested.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceRequestInput'
+      responses:
+        '201':
+          description: Pedido de serviço criado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceRequest'
+        '403':
+          description: MFA step-up obrigatório (mfa_required)
+        '422':
+          description: Dados de entrada inválidos
+  /service-requests/{id}:
+    get:
+      tags: [Pedidos de Serviço]
+      summary: Detalhar pedido de serviço
+      description: |
+        Exige MFA step-up.
+        Cliente só visualiza seus próprios pedidos (outros retornam 403).
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhes do pedido de serviço
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceRequest'
+        '403':
+          description: Acesso proibido a pedidos de outro cliente ou MFA step-up obrigatório
+        '404':
+          description: Pedido não encontrado
+    patch:
+      tags: [Pedidos de Serviço]
+      summary: Atualizar status do pedido de serviço
+      description: |
+        Exige MFA step-up.
+        Profissional/Admin do tenant pode transicionar para accepted, done ou cancelled.
+        Cliente só pode transicionar para cancelled se o status ainda for requested.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateServiceRequestStatusInput'
+      responses:
+        '200':
+          description: Status atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceRequest'
+        '403':
+          description: Transição não autorizada ou MFA step-up obrigatório
+        '404':
+          description: Pedido não encontrado
