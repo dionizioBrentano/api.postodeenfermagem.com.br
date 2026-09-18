@@ -27,6 +27,13 @@ Route::prefix('v1')->group(function () {
     });
 
     // ==========================================
+    // VITRINE DA REDE — OFERTAS EM TODA A REDE
+    // Sem middleware "tenant": busca na rede inteira.
+    // Header X-Tenant-ID é opcional e usado exclusivamente para auditoria.
+    // ==========================================
+    Route::get('/public/network/offerings/search', [\App\Http\Controllers\PublicNetworkOfferingController::class, 'search']);
+
+    // ==========================================
     // CONTEÚDO PÚBLICO — PROCEDIMENTOS DE ENFERMAGEM
     // Sem autenticação, mas ainda com o middleware "tenant": o header
     // X-Tenant-ID mantém o global scope da HasTenant ativo, e o controller

@@ -26,7 +26,9 @@ class AuditService
 
         $tenantId = null;
 
-        if ($auditable && isset($auditable->tenant_id)) {
+        if ($auditable instanceof \App\Models\Tenant) {
+            $tenantId = $auditable->getKey();
+        } elseif ($auditable && isset($auditable->tenant_id)) {
             $tenantId = $auditable->tenant_id;
         } elseif ($actingUser && isset($actingUser->tenant_id)) {
             $tenantId = $actingUser->tenant_id;
