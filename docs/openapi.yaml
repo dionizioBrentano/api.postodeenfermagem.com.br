@@ -206,6 +206,124 @@ components:
           type: string
           enum: [accepted, done, cancelled]
           example: "accepted"
+    ServiceReview:
+      type: object
+      description: Avaliação de um pedido de serviço
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        service_request_id:
+          type: string
+          format: uuid
+        client_user_id:
+          type: string
+          format: uuid
+        service_point_id:
+          type: string
+          format: uuid
+          nullable: true
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        body:
+          type: string
+          example: "Atendimento pontual, profissional muito cuidadoso e atencioso."
+        anonymous:
+          type: boolean
+          example: true
+        publish_requested:
+          type: boolean
+          example: false
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        published_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PublicServiceReview:
+      type: object
+      description: Avaliação pública na vitrine (sem dados pessoais sensíveis)
+      properties:
+        id:
+          type: string
+          format: uuid
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        body:
+          type: string
+          example: "Atendimento de excelência, recomendo muito."
+        anonymous:
+          type: boolean
+          example: false
+        client_name:
+          type: string
+          nullable: true
+          example: "Juliana"
+          description: "Primeiro nome do cliente quando não anônimo. Nulo se anônimo."
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        procedure:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            slug:
+              type: string
+        service_point:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+    CreateServiceReviewInput:
+      type: object
+      required:
+        - stars
+        - body
+      properties:
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        body:
+          type: string
+          maxLength: 5000
+          example: "Profissional pontual e muito cuidadoso."
+        anonymous:
+          type: boolean
+          default: true
+          example: true
+        publish_requested:
+          type: boolean
+          default: false
+          example: false
     UserIdentity:
       type: object
       description: Identidade de autenticação vinculada ao usuário
@@ -1295,6 +1413,47 @@ paths:
                       $ref: '#/components/schemas/PublicOffering'
         '400':
           description: Header X-Tenant-ID ausente
+  /public/reviews:
+    get:
+      tags: [Conteúdo Público]
+      summary: Listar avaliações públicas de procedimentos
+      description: |
+        Retorna avaliações públicas (com published_at preenchido) dos serviços do tenant.
+        Permite filtrar pelo procedure_slug.
+        Respeita regras de anonimato: se a avaliação for anônima, client_name é retornado como nulo;
+        caso contrário, retorna apenas o primeiro nome do cliente.
+        Nunca expõe e-mail, CPF, telefone ou outros dados sensíveis.
+      security:
+        - TenantHeader: []
+      parameters:
+        - in: query
+          name: procedure_slug
+          required: false
+          schema:
+            type: string
+          example: curativo-cirurgico
+        - in: query
+          name: per_page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 15
+      responses:
+        '200':
+          description: Lista de avaliações públicas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublicServiceReview'
+        '400':
+          description: Header X-Tenant-ID ausente
   /service-requests:
     get:
       tags: [Pedidos de Serviço]
@@ -1430,3 +1589,139 @@ paths:
           description: Transição não autorizada ou MFA step-up obrigatório
         '404':
           description: Pedido não encontrado
+  /service-requests/{id}/review:
+    get:
+      tags: [Avaliações de Serviço]
+      summary: Visualizar avaliação do pedido de serviço
+      description: |
+        Exige MFA step-up.
+        Permitido para o cliente dono do pedido ou professional/admin do tenant.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Avaliação do pedido de serviço
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceReview'
+        '403':
+          description: Acesso não autorizado (outro cliente) ou MFA step-up ausente
+        '404':
+          description: Pedido ou avaliação não encontrada
+    post:
+      tags: [Avaliações de Serviço]
+      summary: Cadastrar avaliação para o pedido de serviço
+      description: |
+        Exige MFA step-up.
+        Apenas o cliente solicitante (client_user_id) pode avaliar.
+        O pedido precisa estar com status "done".
+        Prazo máximo: até 14 dias a partir de updated_at do done (ou completed_at).
+        Apenas uma avaliação por pedido.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceReviewInput'
+      responses:
+        '201':
+          description: Avaliação cadastrada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceReview'
+        '403':
+          description: Não autorizado (outro usuário ou MFA step-up ausente)
+        '422':
+          description: Pedido não está concluído, prazo expirado (> 14 dias), pedido já avaliado ou dados inválidos
+  /service-reviews/{id}:
+    get:
+      tags: [Avaliações de Serviço]
+      summary: Detalhar avaliação por ID
+      description: |
+        Exige MFA step-up.
+        Permitido para o cliente dono da avaliação ou professional/admin do tenant.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhes da avaliação
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceReview'
+        '403':
+          description: Acesso proibido à avaliação de outro cliente ou MFA step-up ausente
+        '404':
+          description: Avaliação não encontrada
+  /service-reviews/{id}/publish:
+    patch:
+      tags: [Avaliações de Serviço]
+      summary: Publicar avaliação de serviço na vitrine
+      description: |
+        Exige MFA step-up.
+        Apenas usuários do tipo professional ou admin do tenant podem publicar.
+        Só é permitido se publish_requested for true.
+        Define published_at com a data atual e published_by com o ID do usuário.
+      security:
+        - BearerAuth: []
+        - TenantHeader: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Avaliação publicada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ServiceReview'
+        '403':
+          description: Permissão negada (apenas profissionais/admins com MFA)
+        '422':
+          description: Avaliação não autorizada para publicação pelo cliente (publish_requested é false)
+        '404':
+          description: Avaliação não encontrada

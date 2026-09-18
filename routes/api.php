@@ -37,6 +37,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/procedures/categories', [\App\Http\Controllers\PublicProcedureController::class, 'categories']);
         Route::get('/procedures/{slug}', [\App\Http\Controllers\PublicProcedureController::class, 'show']);
         Route::get('/offerings/search', [\App\Http\Controllers\PublicOfferingController::class, 'search']);
+        Route::get('/reviews', [\App\Http\Controllers\PublicServiceReviewController::class, 'index']);
     });
 
     // ==========================================
@@ -185,6 +186,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/service-requests/{id}', [\App\Http\Controllers\ServiceRequestController::class, 'show']);
             Route::post('/service-requests', [\App\Http\Controllers\ServiceRequestController::class, 'store']);
             Route::patch('/service-requests/{id}', [\App\Http\Controllers\ServiceRequestController::class, 'update']);
+
+            // Avaliações de Pedidos de Serviço
+            Route::get('/service-requests/{id}/review', [\App\Http\Controllers\ServiceReviewController::class, 'showByRequest']);
+            Route::post('/service-requests/{id}/review', [\App\Http\Controllers\ServiceReviewController::class, 'store']);
+            Route::get('/service-reviews/{id}', [\App\Http\Controllers\ServiceReviewController::class, 'show']);
+            Route::patch('/service-reviews/{id}/publish', [\App\Http\Controllers\ServiceReviewController::class, 'publish']);
         });
 
         // ==========================================

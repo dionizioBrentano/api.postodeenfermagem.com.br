@@ -38,6 +38,7 @@ class ServiceRequestResource extends JsonResource
             'slot_window' => $this->slot_window,
             'status' => $this->status,
             'notes_cliente' => $this->notes_cliente,
+            'review' => $this->whenLoaded('review', fn () => new ServiceReviewResource($this->review)),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
