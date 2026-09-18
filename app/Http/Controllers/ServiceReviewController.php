@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ServiceReviewResource;
+use App\Models\ServicePoint;
 use App\Models\ServiceRequest;
 use App\Models\ServiceReview;
 use Illuminate\Http\JsonResponse;
@@ -166,21 +167,50 @@ class ServiceReviewController extends Controller
 
         $review->published_at = now();
         $review->published_by = $user->id;
+
+        $servicePointId = $review->service_point_id ?? $review->serviceRequest?->service_point_id;
+        if ($servicePointId && ! $review->service_point_id) {
+            $review->service_point_id = $servicePointId;
+        }
+
         $review->save();
 
-        // Não recalcular quality_score ainda (placeholder)
-        $this->recalculateQualityScorePlaceholder($review->service_point_id);
+        $this->recalculateQualityScore($servicePointId);
 
         return new ServiceReviewResource($review);
     }
 
     /**
-     * Placeholder para recálculo de score de qualidade (sprint posterior).
-     * Não recalcule quality_score ainda.
+     * Recalcula o quality_score do service_point do pedido:
+     * média das stars dos reviews published daquele service_point.
+     * Decimal 4,2. Se não houver reviews published, null.
+     */
+    protected function recalculateQualityScore(?string $servicePointId): void
+    {
+        if (! $servicePointId) {
+            return;
+        }
+
+        $servicePoint = ServicePoint::withoutGlobalScope('tenant')->find($servicePointId);
+        if (! $servicePoint) {
+            return;
+        }
+
+        $avg = ServiceReview::withoutGlobalScope('tenant')
+            ->where('service_point_id', $servicePointId)
+            ->published()
+            ->avg('stars');
+
+        $servicePoint->update([
+            'quality_score' => $avg !== null ? round((float) $avg, 2) : null,
+        ]);
+    }
+
+    /**
+     * Placeholder mantido para compatibilidade do fluxo de store.
      */
     protected function recalculateQualityScorePlaceholder(?string $servicePointId): void
     {
-        // Placeholder intencional: cálculo de média ponderada e atualização
-        // do quality_score em ServicePoint/Offering será implementado em sprint posterior.
+        //
     }
 }

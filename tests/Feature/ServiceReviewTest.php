@@ -489,4 +489,99 @@ class ServiceReviewTest extends TestCase
             'client_user_id' => $clientAnon->id,
         ]);
     }
+
+    /**
+     * Teste: PATCH publish recalcula o quality_score do service_point do pedido como média das stars.
+     * Decimal 4,2. Se não houver reviews published, null.
+     */
+    public function test_publish_review_updates_service_point_quality_score(): void
+    {
+        [$prof, $profToken] = $this->createMfaVerifiedUser($this->tenant, 'professional');
+        [$client1] = $this->createMfaVerifiedUser($this->tenant, 'patient');
+        [$client2] = $this->createMfaVerifiedUser($this->tenant, 'patient');
+        [$client3] = $this->createMfaVerifiedUser($this->tenant, 'patient');
+
+        $servicePoint = ServicePoint::create([
+            'tenant_id' => $this->tenant->id,
+            'user_id' => $prof->id,
+            'name' => 'Ponto de Teste Avaliação',
+            'cep' => '01310-100',
+            'coverage_km' => 10.0,
+            'quality_score' => null,
+            'active' => true,
+        ]);
+
+        $request1 = $this->createServiceRequest($client1, ServiceRequest::STATUS_DONE, [
+            'service_point_id' => $servicePoint->id,
+        ]);
+        $request2 = $this->createServiceRequest($client2, ServiceRequest::STATUS_DONE, [
+            'service_point_id' => $servicePoint->id,
+        ]);
+        $request3 = $this->createServiceRequest($client3, ServiceRequest::STATUS_DONE, [
+            'service_point_id' => $servicePoint->id,
+        ]);
+
+        // Review 1: 5 estrelas
+        $review1 = ServiceReview::create([
+            'tenant_id' => $this->tenant->id,
+            'service_request_id' => $request1->id,
+            'client_user_id' => $client1->id,
+            'service_point_id' => $servicePoint->id,
+            'stars' => 5,
+            'body' => 'Excelente atendimento.',
+            'anonymous' => true,
+            'publish_requested' => true,
+            'published_at' => null,
+        ]);
+
+        // Review 2: 4 estrelas
+        $review2 = ServiceReview::create([
+            'tenant_id' => $this->tenant->id,
+            'service_request_id' => $request2->id,
+            'client_user_id' => $client2->id,
+            'service_point_id' => $servicePoint->id,
+            'stars' => 4,
+            'body' => 'Muito bom.',
+            'anonymous' => true,
+            'publish_requested' => true,
+            'published_at' => null,
+        ]);
+
+        // Review 3: 1 estrela, mas NÃO publicado (publish_requested = false)
+        ServiceReview::create([
+            'tenant_id' => $this->tenant->id,
+            'service_request_id' => $request3->id,
+            'client_user_id' => $client3->id,
+            'service_point_id' => $servicePoint->id,
+            'stars' => 1,
+            'body' => 'Não publicado.',
+            'anonymous' => true,
+            'publish_requested' => false,
+            'published_at' => null,
+        ]);
+
+        $this->assertNull($servicePoint->fresh()->quality_score);
+
+        // 1. Publica Review 1 (5 estrelas)
+        $response1 = $this->patchJson(
+            "/api/v1/service-reviews/{$review1->id}/publish",
+            [],
+            $this->headers($this->tenant, $profToken)
+        );
+        $response1->assertStatus(200);
+
+        // Score deve ser 5.00
+        $this->assertEquals(5.00, (float) $servicePoint->fresh()->quality_score);
+
+        // 2. Publica Review 2 (4 estrelas)
+        $response2 = $this->patchJson(
+            "/api/v1/service-reviews/{$review2->id}/publish",
+            [],
+            $this->headers($this->tenant, $profToken)
+        );
+        $response2->assertStatus(200);
+
+        // Score deve ser a média: (5 + 4) / 2 = 4.50 (o review 3 de 1 estrela não publicado é ignorado)
+        $this->assertEquals(4.50, (float) $servicePoint->fresh()->quality_score);
+    }
 }
